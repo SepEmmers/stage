@@ -1,0 +1,22 @@
+/* Dit is onze aparte font.css file. Hierin zetten we de fonts die we willen gebruiken. */
+/* We importeren de fonts van Google Fonts. */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap');
+
+/* We maken een class voor elke font die we willen gebruiken. */
+.noto-sans-normal {
+    font-family: "Noto Sans", sans-serif;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-style: normal;
+    font-variation-settings:
+      "wdth" 100;
+  }
+
+  .noto-sans-bold {
+    font-family: "Noto Sans", sans-serif;
+    font-optical-sizing: auto;
+    font-weight: 500;
+    font-style: normal;
+    font-variation-settings:
+      "wdth" 100;
+  }

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QRscan</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="css/tailwind.css">
+    <link rel="stylesheet" href="css/font.css">
+    <script src="js/functions.js"></script>
+
+    <style type="text/tailwindcss">
+
+        @theme {
+
+            /* basis kleuren */
+            --color-default-grey: oklch(88.53% 0 0);
+
+            --color-spc-green: oklch(72.13% 0.1721 126.07);
+
+            /* input form */
+            --color-input-bg: oklch(95.81% 0 0);
+
+            /* text */
+            --color-text-white: #fff;
+
+            /* button start/stop */
+            --color-start-green: oklch(84.26% 0.2256 129.65);
+
+            --color-stop-red: oklch(63.78% 0.2373 25.44);
+
+            /* button terug/uitloggen */
+            --color-terug-rood: oklch(58.3% 0.238666 28.4765);
+
+            /* kalender */
+            --color-kalender-day: oklch(93.43% 0 259.82);
+
+            --color-kalender-legencellen: oklch(93.4% 0 0 / 60.72%);
+
+            --color-kalender-firstrow: oklch(62.84% 0.1151 276.94);
+        }
+
+    </style>
+    
+</head>
+<body class="flex flex-col items-center md:gap-4 min-h-dvh noto-sans-normal">
+
+    <section class="flex flex-row items-center justify-center dag bg-spc-green">
+        <h2 id="dagdisplay" class="text-white"></h2>
+    </section>
+
+    <section class="tijdstip bg-default-grey my-12 md:my-0 mb-16 md:mb-8">
+        <h1 id="timeDisplay" class="noto-sans-bold"></h1>
+    </section>
+
+
+    <section class="flex w-[80%] max-w-[250px] mx-auto">
+
+        <div>
+            <img src="media library/qricon.png" alt="qr-code scanner">
+        </div>
+        
+
+    </section>
+
+
+    <section class="flex w-full mt-24 md:mt-8">
+        <a href="index.html" class="w-[80%] max-w-[500px] max-h-[80px] mx-auto ">
+            <button class="flex flex-row items-center justify-center gap-4 button bg-terug-rood cursor-pointer">
+                <img src="media library/back arrow.webp" alt="terug" class="img-button">
+                <h2>Terug</h2>
+            </button>
+        </a>
+    </section>
+
+</body>
+</html>

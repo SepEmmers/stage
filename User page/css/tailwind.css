@@ -1,0 +1,218 @@
+/*========================Tailwindcss========================*/
+
+/* We werken voor dit project met Tailwind css
+    Tailwind css is een utility-first css framework
+    Het is een set van css classes die je kan gebruiken om snel en eenvoudig
+    een responsive website te maken.
+    Tailwind css is een low-level css framework, dit betekent dat je geen css moet schrijven
+    maar enkel de classes moet gebruiken die Tailwind css aanbiedt.
+    Meer info: https://tailwindcss.com/docs/adding-custom-styles
+*/
+
+
+/*===================-----layer's-----===================*/
+
+/* in Tailwind css kan je werken met layers
+    Layers zijn een manier om je css te organiseren
+    Je kan bijvoorbeeld een layer base maken waarin je de basis stijlen van je website zet
+    en een layer components waarin je de stijlen van je componenten zet
+    Meer info: https://tailwindcss.com/docs/adding-custom-styles
+*/
+
+
+/*---------------------base----------------------*/
+
+/* in de base layer zet je de basis stijlen van je website
+    Dit zijn de stijlen die je overal op je website wil gebruiken
+    Bijvoorbeeld de stijlen voor je body, headings, links, ...
+*/
+
+@layer base {
+    h1 {
+        font-size: clamp(1.875rem, 1.4844rem + 1.25vw, 2.1875rem);
+    }
+
+    h2 {
+        font-size: clamp(1.4375rem, 1.2813rem + 0.5vw, 1.5625rem);
+    }
+
+    label {
+        font-size: clamp(1.4375rem, 1.2813rem + 0.5vw, 1.5625rem);
+    }
+
+}
+
+@media (max-width: 769px) {
+
+    h1 {
+        font-size: clamp(2.1875rem, 2.0313rem + 0.5vw, 2.3125rem);
+    }
+    
+    h2  {
+        font-size: clamp(1.5625rem, 1.4844rem + 0.25vw, 1.625rem);
+    }
+
+    label {
+        font-size: clamp(1.5625rem, 1.4844rem + 0.25vw, 1.625rem);
+    }
+}
+
+/*---------------------utility----------------------*/
+
+/* in de utility layer zet je eigen gemaaakte classes. Deze kan je dan gebruiken
+    in je html om snel en eenvoudig stijlen toe te passen op je website.
+    Meer info: https://tailwindcss.com/docs/utility-first
+*/
+
+
+@layer utilities {
+
+    /*---img---*/
+    .img-button {
+        /*height: 2.5rem;*/
+        height: clamp(1.5625rem, 1.4063rem + 0.5vw, 1.6875rem);
+    }
+
+    .logo-index {
+        /*height: 3.75rem;*/
+        height: clamp(5rem, 4.2188rem + 2.5vw, 5.625rem);
+        width: clamp(5rem, 4.2188rem + 2.5vw, 5.625rem);
+    }
+
+    .logo-start-stop {
+        /*height: 3.75rem;*/
+        height: clamp(4.0625rem, 3.6719rem + 1.25vw, 4.375rem);
+        width: clamp(4.0625rem, 3.6719rem + 1.25vw, 4.375rem);
+    }
+
+    /*---text---*/
+    .p-index {
+        font-size: clamp(1rem, 0.8438rem + 0.5vw, 1.125rem);
+    }
+
+    /*.p-kalender {
+        font-size: clamp(1.125rem, 0.9688rem + 0.5vw, 1.25rem);
+    }*/
+
+    /*------*/
+    .margin-section-button {
+        margin-top: calc(2.5rem + 2vh);
+    }
+
+
+}
+
+@media (min-width: 769px) {
+    .margin-section-button {
+        margin-top: 0px;
+    }
+}
+
+
+
+
+/*===================-----theme-----===================*/
+
+/* in Tailwind css kan je werken met een theme
+    In de theme kan je kleuren, fonts, spacing, ...
+    definiëren die je wil gebruiken in je website
+    Meer info: https://tailwindcss.com/docs/theme
+*/
+
+
+
+/* Deze code kan je vinden in de html head*/
+
+
+
+
+/*===================-----custom css-----===================*/
+
+/*  Ik maak aparte classen voor de structuren die
+    op elke pagina voorkommen. zoals bv: de buttons of het tijdstip
+    (Ik heb deze niet in utilities gezet omdat het
+    anders moelijk responsive te maken is.)
+*/
+
+
+/*---------------------button----------------------*/
+
+  .button{
+    width: 100%;
+    max-width: 500px;
+    max-height: 80px;
+    /* flex */
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    /* padding */
+    padding: 0.625rem;
+    padding-top: calc(0.625rem + 0.8vw);
+    padding-bottom: calc(0.625rem + 0.8vw);
+    /* margin */
+    margin-left: auto;
+    margin-right: auto;
+    /* border */
+    border-radius: 5px;
+}
+
+@media (min-width: 769px) {
+    .button {
+        /* padding */
+        padding-top: 16px;
+        padding-bottom: 16px;
+    }
+}
+
+/*---------------------tijdstip----------------------*/
+
+.tijdstip {
+    /* padding */
+    padding-right: calc(1.5rem + 0.7vw);
+    padding-left: calc(1.5rem + 0.7vw);
+    padding-top: calc(0.313rem + 0.7vw);
+    padding-bottom: calc(0.313rem + 0.7vw);
+}
+
+@media (min-width: 769px) {
+    .tijdstip {
+        /* padding */
+        padding-top: 8px;
+        padding-bottom: 8px;
+    }
+}
+
+/*---------------------dag----------------------*/
+
+.dag {
+    width: 100%;
+    /* padding */
+    padding-top: calc(0.625rem + 0.8vw);
+    padding-bottom: calc(0.625rem + 0.8vw);
+    /* border */
+    border-bottom-right-radius: 10px;
+    border-bottom-left-radius: 10px;
+}
+
+@media (min-width: 769px) {
+    .dag {
+        /* padding */
+        padding-top: 16px;
+        padding-bottom: 16px;
+    }
+}
+
+/*---------------------of----------------------*/
+
+@media (max-width: 769px) {
+    .of-phone {
+        width: calc(100vw - 3rem);
+    }
+}
+
+/*---------------------form-input----------------------*/
+
+.form-input {
+    padding: 10px 15px;
+    min-height: calc(2.188rem + 0.5vw);
+}

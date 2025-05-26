@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QRscan</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <link rel="stylesheet" href="css/tailwind.css" />
+    <link rel="stylesheet" href="css/font.css" />
+    <script src="https://rawgit.com/schmich/instascan-builds/master/instascan.min.js"></script>
+    <script src="js/script.js"></script>
+
+    <style type="text/tailwindcss">
+      @theme {
+        /* basis kleuren */
+        --color-default-grey: oklch(88.53% 0 0);
+
+        --color-spc-green: oklch(72.13% 0.1721 126.07);
+
+        /* input form */
+        --color-input-bg: oklch(95.81% 0 0);
+
+        /* text */
+        --color-text-white: #fff;
+
+        /* button start/stop */
+        --color-start-green: oklch(84.26% 0.2256 129.65);
+
+        --color-stop-red: oklch(63.78% 0.2373 25.44);
+
+        /* button terug/uitloggen */
+        --color-terug-rood: oklch(58.3% 0.238666 28.4765);
+
+        /* kalender */
+        --color-kalender-dayn: oklch(55.25% 0.0326 268.09);
+
+        --color-kalender-day: oklch(93.43% 0 259.82);
+      }
+    </style>
+  </head>
+  <body class="flex flex-col items-center md:gap-4 min-h-dvh noto-sans-normal">
+    <section class="flex flex-row items-center justify-center dag bg-spc-green">
+      <h2 id="dagdisplay" class="text-white"></h2>
+    </section>
+
+    <section class="tijdstip bg-default-grey my-12 md:my-0 mb-16 md:mb-8">
+      <h1 id="timeDisplay" class="noto-sans-bold"></h1>
+    </section>
+
+    <section class="flex w-[80%] max-w-[250px] mx-auto">
+      <div id="camera-container">
+        <video id="preview" class="w-full h-60"></video>
+      </div>
+      <p id="scan-result" class="mt-4 text-gray-600"></p>
+    </section>
+
+    <section class="flex w-full mt-24 md:mt-8">
+      <a href="index.html" class="w-[80%] max-w-[500px] max-h-[80px] mx-auto">
+        <button
+          class="flex flex-row items-center justify-center gap-4 button bg-terug-rood cursor-pointer"
+        >
+          <img
+            src="media library/back arrow.webp"
+            alt="terug"
+            class="img-button"
+          />
+          <h2>Terug</h2>
+        </button>
+      </a>
+    </section>
+
+    <script>
+      let scanner;
+
+      document.addEventListener("DOMContentLoaded", function () {
+        const videoElement = document.getElementById("preview");
+        const scanResultElement = document.getElementById("scan-result");
+
+        scanner = new Instascan.Scanner({ video: videoElement });
+
+        Instascan.Camera.getCameras()
+          .then(function (cameras) {
+            if (cameras.length > 0) {
+              scanner.start(cameras[0]); // Gebruik de eerste camera en start de scanner
+            } else {
+              console.error("Geen camera's gevonden.");
+              scanResultElement.innerText = "Geen camera's gevonden.";
+            }
+          })
+          .catch(function (e) {
+            console.error(e);
+            scanResultElement.innerText = "Fout bij het openen van de camera.";
+          });
+
+        scanner.addListener("scan", function (content) {
+          console.log("QR-code gescand:", content);
+          scanResultElement.innerText =
+            "QR-code gescand. Bezig met verwerken...";
+          // Stuur de gescande inhoud naar de server
+          $.ajax({
+            url: "process_qr.php", // We maken dit PHP-bestand in de volgende stap
+            type: "POST",
+            data: { qr_content: content },
+            dataType: "json",
+            success: function (response) {
+              if (response.status === "success" && response.redirect) {
+                window.location.href = response.redirect; // Stuur door naar de pincodepagina
+              } else {
+                scanResultElement.innerText =
+                  response.message || "Fout bij het verwerken van de QR-code.";
+              }
+            },
+            error: function (xhr, status, error) {
+              console.error("Fout bij de AJAX-aanvraag:", error);
+              scanResultElement.innerText =
+                "Er is een fout opgetreden bij de communicatie met de server.";
+            },
+          });
+        });
+      });
+    </script>
+  </body>
+</html>

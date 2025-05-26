@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Personeel Login</title>
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"
+      integrity="sha512-v2CJ7UaYy4JwqLDIrZUI/4hqeoQieOmAZNXBeQyjo21dadnwR+8ZaIJVT8EE2iyI61OV8e6M8PP2/4hpQINQ/g=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    ></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link
+      rel="stylesheet"
+      href="css/tailwind.css
+    "
+    />
+    <link rel="stylesheet" href="css/font.css" />
+    <script src="js/script.js"></script>
+
+    <style type="text/tailwindcss">
+      @theme {
+        /* basis kleuren */
+        --color-default-grey: oklch(88.53% 0 0);
+        --color-spc-green: oklch(72.13% 0.1721 126.07);
+
+        /* input form */
+        --color-input-bg: oklch(95.81% 0 0);
+
+        /* text */
+        --color-white: #fff;
+
+        /* button start/stop */
+        --color-start-green: oklch(84.26% 0.2256 129.65);
+
+        --color-stop-red: oklch(63.78% 0.2373 25.44);
+
+        /* button terug/uitloggen */
+        --color-terug-rood: oklch(58.3% 0.238666 28.4765);
+
+        /* kalender */
+        --color-kalender-dayn: oklch(55.25% 0.0326 268.09);
+
+        --color-kalender-day: oklch(93.43% 0 259.82);
+      }
+    </style>
+  </head>
+  <body class="flex flex-col items-center md:gap-4 min-h-dvh noto-sans-normal">
+    <section class="flex flex-row items-center justify-center dag bg-spc-green">
+      <h2 id="dagdisplay" class="text-white"></h2>
+    </section>
+
+    <section class="tijdstip bg-default-grey my-12 mb-18 md:my-0 md:mb-0">
+      <h1 id="timeDisplay" class="noto-sans-bold"></h1>
+    </section>
+
+    <section class="flex flex-col w-full">
+      <form action="" class="flex flex-col gap-8 w-[80%] max-w-[500px] mx-auto">
+        <div class="flex flex-col gap-2 w-full max-w-[400px] mx-auto">
+          <label for="email">Naam:</label>
+          <input
+            type="text"
+            id="email"
+            name="email"
+            required
+            class="form-input bg-input-bg rounded-full border-solid border border-neutral-600"
+          />
+        </div>
+        <div class="flex flex-col gap-2 w-full max-w-[400px] mx-auto">
+          <label for="password">Wachtwoord:</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            required
+            class="form-input bg-input-bg rounded-full border-solid border border-neutral-600"
+          />
+        </div>
+        <button
+          type="submit"
+          class="flex flex-row items-center justify-center gap-4 button bg-spc-green mt-2 cursor-pointer"
+          id="loginBtn"
+        >
+          <h2>Login</h2>
+          <img
+            src="media library/rightarrow.png"
+            alt="login"
+            class="img-button"
+          />
+        </button>
+      </form>
+    </section>
+
+    <section class="flex w-full mt-3 md:mt-0">
+      <a href="index.html" class="w-[80%] max-w-[500px] max-h-[80px] mx-auto">
+        <button
+          class="flex flex-row items-center justify-center gap-4 button bg-terug-rood cursor-pointer"
+        >
+          <img
+            src="media library/back arrow.webp"
+            alt="terug"
+            class="img-button"
+          />
+          <h2>Terug</h2>
+        </button>
+      </a>
+    </section>
+
+    <script>
+      $(document).ready(function () {
+        $("#loginBtn").click(function (e) {
+          e.preventDefault(); // Voorkom standaard formuliergedrag
+
+          var email = $("#email").val();
+          var password = $("#password").val();
+          var messageDiv = $("#message");
+
+          $.ajax({
+            url: "loginpersoneel.php", // Het PHP bestand dat de login verwerkt
+            type: "POST",
+            data: {
+              email: email,
+              password: password,
+            },
+            dataType: "json", // Verwacht een JSON response van de server
+            success: function (response) {
+              // Controleer of er een redirect nodig is
+              if (response.redirect) {
+                window.location.href = response.redirect;
+                return; // Stop de verdere verwerking
+              }
+
+              if (response.success) {
+                messageDiv
+                  .removeClass("error")
+                  .addClass("success")
+                  .text(response.message);
+                // Redirect de admin naar de gewenste pagina na succesvolle login
+                window.location.href = "userstart.html"; // Vervang dit door de juiste URL voor het admin dashboard
+              } else {
+                messageDiv
+                  .removeClass("success")
+                  .addClass("error")
+                  .text(response.message);
+              }
+            },
+            error: function (xhr, status, error) {
+              console.error("AJAX error:", status, error);
+              messageDiv
+                .removeClass("success")
+                .addClass("error")
+                .text("Er is een fout opgetreden tijdens het inloggen.");
+            },
+          });
+        });
+      });
+
+      $(document).ready(function () {
+        let nfcIdBuffer = "";
+        let isScanning = false;
+        const minNfcIdLength = 14; // Pas dit aan aan de lengte van jouw NFC ID's
+        const scanTimeout = 100; // Tijd in milliseconden om te wachten op volgende karakters
+
+        $(document).on("keydown", function (event) {
+          if (
+            event.key.length === 1 &&
+            !event.metaKey &&
+            !event.ctrlKey &&
+            !event.altKey
+          ) {
+            nfcIdBuffer += event.key;
+            isScanning = true;
+
+            // Reset de timer als er een nieuw karakter binnenkomt
+            clearTimeout($.data(this, "nfcTimer"));
+            $.data(
+              this,
+              "nfcTimer",
+              setTimeout(function () {
+                if (nfcIdBuffer.length >= minNfcIdLength) {
+                  console.log("Mogelijke NFC ID gescand:", nfcIdBuffer);
+                  // Stuur de gescande ID naar de server voor login
+                  $.ajax({
+                    url: "process_nfc_login.php", // Maak dit PHP-bestand
+                    type: "POST",
+                    data: { nfc_id: nfcIdBuffer },
+                    dataType: "json",
+                    success: function (response) {
+                      if (response.status === "success" && response.redirect) {
+                        window.location.href = response.redirect; // Stuur door naar de dashboard pagina
+                      } else {
+                        console.log("NFC login mislukt:", response.message);
+                        // Optioneel: Geef een feedback aan de gebruiker (bijvoorbeeld een melding)
+                      }
+                    },
+                    error: function (xhr, status, error) {
+                      console.error("Fout bij de AJAX-aanvraag:", error);
+                      // Optioneel: Geef een feedback aan de gebruiker
+                    },
+                  });
+                } else if (nfcIdBuffer.length > 0) {
+                  console.log("NFC scan te kort:", nfcIdBuffer);
+                  // Optioneel: Geef feedback dat de scan mislukt is
+                }
+                nfcIdBuffer = ""; // Reset de buffer na de timeout
+                isScanning = false;
+              }, scanTimeout)
+            );
+          }
+        });
+      });
+
+      document.addEventListener("DOMContentLoaded", function () {
+        const elementsToUnfocus = document.querySelectorAll(
+          "button, a, input, select, textarea"
+        ); // Selecteer alle relevante elementen
+        elementsToUnfocus.forEach((element) => {
+          element.setAttribute("tabindex", "-1");
+        });
+      });
+
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Tab" || event.keyCode === 9) {
+          event.preventDefault();
+        }
+      });
+    </script>
+  </body>
+</html>

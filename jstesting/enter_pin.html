@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voer uw pincode in</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/tailwind.css" />
+  </head>
+  <body class="flex flex-col items-center justify-center h-screen bg-gray-100">
+    <div class="bg-white p-8 rounded shadow-md">
+      <h1 class="text-2xl font-semibold mb-4">Voer uw pincode in</h1>
+      <form id="pin-form">
+        <div class="mb-4">
+          <label for="pin" class="block text-gray-700 text-sm font-bold mb-2"
+            >Pincode:</label
+          >
+          <input
+            type="password"
+            id="pin"
+            name="pin"
+            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            placeholder="****"
+            maxlength="4"
+            required
+          />
+        </div>
+        <button
+          type="submit"
+          class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+        >
+          Inloggen
+        </button>
+        <p id="pin-result" class="mt-4 text-gray-600"></p>
+      </form>
+    </div>
+
+    <script>
+      $(document).ready(function () {
+        $("#pin-form").submit(function (event) {
+          event.preventDefault();
+          const pin = $("#pin").val();
+          $("#pin-result").text("Bezig met verifiëren...");
+
+          $.ajax({
+            url: "process_pin.php", // Dit PHP-bestand maken we in de volgende stap
+            type: "POST",
+            data: { pin: pin },
+            dataType: "json",
+            success: function (response) {
+              if (response.status === "success" && response.redirect) {
+                window.location.href = response.redirect; // Stuur door naar de start/stop pagina
+              } else {
+                $("#pin-result").text(
+                  response.message || "Fout bij het verifiëren van de pincode."
+                );
+              }
+            },
+            error: function (xhr, status, error) {
+              console.error("Fout bij de AJAX-aanvraag:", error);
+              $("#pin-result").text(
+                "Er is een fout opgetreden bij de communicatie met de server."
+              );
+            },
+          });
+        });
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard admin</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="css/tailwind.css">
+    <link rel="stylesheet" href="css/font.css">
+    <script src="js/script.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <style type="text/tailwindcss">
+        @theme {
+            /* basis kleuren */
+            --color-default-grey: oklch(88.53% 0 0);
+            --color-spc-green: oklch(72.13% 0.1721 126.07);
+            /* background page */
+            --color-background: oklch(95.81% 0 0);
+            /* text */
+            --color-text-white: #fff;
+            /* button toevoegen/aanpassen/verwijderen */
+            --color-toevoegenAanpassen: oklch(84.26% 0.2256 129.65);
+            --color-verwijderen: oklch(58.3% 0.238666 28.4765);
+            /* button terug/uitloggen */
+            --color-terug-rood: oklch(63.78% 0.2373 25.44);
+            /* admin */
+            --color-admin: oklch(67.98% 0.171156 256.1873);
+            --color-rooster: oklch(65.67% 0 0);
+            --color-achtergrond2: oklch(90.67% 0 0);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center min-h-dvh noto-sans-normal">
+    <section class="flex flex-row items-center justify-center dag bg-admin">
+        <h2 class="text-white ">Dashboard Admin</h2>
+    </section>
+    <article class="flex flex-col items-center w-full flex-grow relative">
+        <div class="w-full min-h-[100px]">
+        </div>
+        <section class="flex flex-col items-center justify-center w-full md:w-[80%] max-w-[1200px] min-h-[130px] shadow-md noto-sans-bold absolute top-[20px] bg-white">
+            <a href="admin.html" class="w-full relative">
+                <img src="media library/logout.png" alt="logout" class="w-[47px] h-[45px] absolute top-[-20px] left-[-20px] p-2 bg-terug-rood rounded-full ">
+            </a>
+            <h1>Welkom, admin</h1>
+        </section>
+        <section class="flex flex-col items-end gap-16 w-full flex-grow bg-background ">
+            <div class="min-h-[50px] w-full"></div>
+            <div class="flex flex-col justify-start items-start gap-8 w-full md:w-[80%] max-w-[1200px] mx-auto">
+                <div class="flex flex-row justify-end w-full gap-8 relative">
+                    <button class="flex justify-center w-[7%] absolute bottom-[0px] left-[0px]  cursor-pointer hover:scale-110 transition-transform duration-200 ease-in-out" onClick="window.location.href=window.location.href">
+                        <img src="media library/Refresh_icon.png" alt="herlaat" class="w-[30px] h-[30px]">
+                    </button>
+                    <a href="werktoevoegen.php" class="hover:scale-101 transition-transform duration-200 ease-in-out">
+                        <div class="rounded-md button-toepassen bg-white">
+                            <div class="flex flex-row items-center justify-center bg-toevoegenAanpassen rounded-md min-w-[55px]">
+                                <img src="media library/plus.png" alt="Werkuren toevoegen" class="img-button">
+                            </div>
+                            <div class="flex items-center justify-center flex-grow px-6">
+                                <h2 class="noto-sans-bold">Werkuren toevoegen</h2>
+                            </div>
+                        </div>
+                    </a>
+                    <a href="personen.html" class="hover:scale-101 transition-transform duration-200 ease-in-out">
+                        <div class="rounded-md button-toepassen bg-white">
+                            <div class="flex flex-row items-center justify-center bg-admin rounded-md min-w-[55px]">
+                                <img src="media library/personen.png" alt="Ga naar personen" class="img-button">
+                            </div>
+                            <div class="flex items-center justify-center flex-grow px-4">
+                                <h2 class="noto-sans-bold">Personen</h2>
+                            </div>
+                        </div>
+                    </a>
+                    <select id="sortBy" class="hidden">
+                        <option value=""></option>
+                        <option value="naam_asc"></option>
+                        <option value="naam_desc"></option>
+                        <option value="datum_asc"></option>
+                        <option value="datum_desc"></option>
+                        <option value="uren_asc"></option>
+                        <option value="uren_desc"></option>
+                    </select>
+                </div>
+                <div class="flex flex-col w-full">
+                    <div class="flex flex-row w-full bg-admin py-4 rounded-tl-md rounded-tr-md sticky top-0">
+                        <button class="flex justify-center items-center w-[7%] cursor-pointer" onclick="showSortingFilter()">
+                            <img src="media library/sorteren.png" alt="Sorteren" class="w-[25px] h-[25px]">
+                        </button>
+                        <div class="flex flex-row justify-center w-[18%]">
+                            <h3 class="text-white noto-sans-bolder">Datum</h3>
+                            <button class="cursor-pointer w-[40px] flex justify-center items-center" onclick="showDatePicker()">
+                                <img src="media library/kalender.png" alt="Filteren op datum" class="w-[25px] h-[25px]">
+                            </button>
+                        </div>
+                        <div class="flex flex-row justify-center w-[35%]">
+                            <h3 class="text-white noto-sans-bolder">Naam</h3>
+                        </div>
+                        <div class="flex justify-center w-[20%]">
+                            <h3 class="text-white noto-sans-bolder">Begintijd</h3>
+                        </div>
+                        <div class="flex justify-center w-[20%]">
+                            <h3 class="text-white noto-sans-bolder">Eindtijd</h3>
+                        </div>
+                    </div>
+                    <div id="historyDisplay" class="w-full min-h-auto border-x-[1.5px] border-rooster">
+                        <div class="flex flex-row w-full min-h-[62px] divide-x-[1.5px] border-b-[1.5px] divide-rooster border-rooster bg-white">
+                            <a href="" class="flex justify-center items-center w-[7%]">
+                                <img src="media library/Bewerken.webp" alt="Bewerken" class="w-[30px] h-[30px]">
+                            </a>
+                            <div class="flex items-center justify-center w-[18%]">
+                                <p>09/10/2025</p>
+                            </div>
+                            <div class="flex items-center justify-center w-[35%]">
+                                <p>Bob ross</p>
+                            </div>
+                            <div class="flex items-center justify-center w-[20%]">
+                                <p>09:10</p>
+                            </div>
+                            <div class="flex items-center justify-center w-[20%]">
+                                <p>09:12</p>
+                            </div>
+                        </div>
+                        <div class="flex flex-row w-full min-h-[62px] divide-x-[1.5px] border-b-[1.5px] divide-rooster border-rooster bg-achtergrond2">
+                            <a href="" class="flex justify-center items-center w-[7%]">
+                                <img src="media library/Bewerken.webp" alt="Bewerken" class="w-[30px] h-[30px]">
+                            </a>
+                            <div class="flex items-center justify-center w-[18%]">
+                                <p>09/10/2025</p>
+                            </div>
+                            <div class="flex items-center justify-center w-[35%]">
+                                <p>Imadeyunuagbon Van Den Heuvel</p>
+                            </div>
+                            <div class="flex items-center justify-center w-[20%]">
+                                <p>09:10</p>
+                            </div>
+                            <div class="flex items-center justify-center w-[20%]">
+                                <p>09:12</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </article>
+    <div class="fixed top-0 left-0 w-full h-full bg-black/50 hidden" id="date-picker-module">
+        <div class="flex flex-col items-center justify-center w-full h-full">
+            <div class="flex flex-col items-center justify-center w-[90%] max-w-[400px] bg-white rounded-md shadow-lg">
+                <label class="text-xl noto-sans-bold mt-4" for="filterDatum">Selecteer een datum</label>
+                <input type="date" class="mt-4 mb-8 px-4 py-2 border border-gray-300 rounded-md" id="filterDatum" name="date-input">
+                </div>
+        </div>
+    </div>
+    <div class="fixed top-0 left-0 w-full h-full bg-black/50 hidden" id="name-picker-module">
+        <div class="flex flex-col items-center justify-center w-full h-full">
+            <div class="flex flex-col items-center justify-center w-[90%] max-w-[400px] bg-white rounded-md shadow-lg">
+                    <label for="filterNaamModule" class="text-xl noto-sans-bold mt-4">Filter op naam:</label>
+                    <select  id="filterNaamModule" type="text" class="mt-4 mb-8 px-4 py-2 border border-gray-300 rounded-md">
+                      <option value="">Alle</option>
+                    </select>
+                </div>
+        </div>
+    </div>
+    <div class="fixed top-0 left-0 w-full h-full bg-black/50 hidden" id="sorting-filter-module">
+        <div class="flex flex-col items-center justify-center w-full h-full">
+            <div class="flex flex-col items-center justify-center w-[90%] max-w-[400px] bg-white rounded-md shadow-lg">
+                <label class="text-xl noto-sans-bold mt-4" for="sortByModule">Selecteer een filter</label>
+                <select type="text" class="mt-4 mb-8 px-4 py-2 border border-gray-300 rounded-md" id="sortByModule" name="sorting-filter-input">
+                    <option value="">-- Selecteer een optie --</option>
+                    <option value="naam_asc">Naam A-Z</option>
+                    <option value="naam_desc">Naam Z-A</option>
+                    <option value="datum_asc">Datum Oud-Nieuw</option>
+                    <option value="datum_desc">Datum Nieuw-Oud</option>
+                    <option value="uren_asc">Uren Laag-Hoog</option>
+                    <option value="uren_desc">Uren Hoog-Laag</option>
+                </select>
+                </div>
+        </div>
+    </div>
+    <script src="js/adminstart.js"></script>
+</body>
+</html>

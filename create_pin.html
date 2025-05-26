@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PIN aanmaken</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="css/tailwind.css" />
+    <script src="js/script.js"></script>
+    <link rel="stylesheet" href="css/font.css" />
+    <style type="text/tailwindcss">
+      @theme {
+        /* basis kleuren */
+        --color-default-grey: oklch(88.53% 0 0);
+
+        --color-spc-green: oklch(72.13% 0.1721 126.07);
+
+        /* input form */
+        --color-input-bg: oklch(95.81% 0 0);
+
+        /* text */
+        --color-text-white: #fff;
+
+        /* button start/stop */
+        --color-start-green: oklch(84.26% 0.2256 129.65);
+
+        --color-terug-rood: oklch(58.3% 0.238666 28.4765);
+
+        /* kalender */
+
+        --color-kalender-day: oklch(93.43% 0 259.82);
+
+        --color-kalender-legencellen: oklch(93.4% 0 0 / 60.72%);
+
+        --color-kalender-firstrow: oklch(62.84% 0.1151 276.94);
+
+        --color-kalender-hover: oklch(0.71 0.0978 276.94);
+      }
+    </style>
+
+    <script>
+      $(document).ready(function () {
+        $("#createPinForm").submit(function (event) {
+          event.preventDefault();
+          var newPin = $("#newPin").val();
+          var confirmPin = $("#confirmPin").val();
+
+          if (newPin.length !== 4 || !/^\d+$/.test(newPin)) {
+            alert("De PIN moet 4 cijfers lang zijn.");
+            return;
+          }
+
+          if (newPin !== confirmPin) {
+            alert("De PIN's komen niet overeen.");
+            return;
+          }
+
+          $.ajax({
+            url: "save_pin.php",
+            type: "POST",
+            data: {
+              newPin: newPin,
+            },
+            dataType: "json",
+            success: function (response) {
+              if (response.success) {
+                alert(response.message);
+                window.location.href = "login.html"; // Redirect naar de inlogpagina
+              } else {
+                alert(response.message);
+              }
+            },
+            error: function (xhr, status, error) {
+              console.error("Fout bij het opslaan van de PIN:", status, error);
+              alert("Er is een fout opgetreden bij het opslaan van de PIN.");
+            },
+          });
+        });
+      });
+    </script>
+  </head>
+
+  <body
+    class="flex flex-col items-center gap-4 md:gap-4 min-h-dvh noto-sans-normal"
+  >
+    <section class="flex flex-row items-center justify-center dag bg-spc-green">
+      <h2 id="dagdisplay" class="text-white"></h2>
+    </section>
+
+    <section class="tijdstip bg-default-grey mt-12 md:mt-0 md:mb-0">
+      <h1 id="timeDisplay" class="noto-sans-bold"></h1>
+    </section>
+
+    <section class="flex flex-col w-[80%] max-w-[500px] gap-4">
+      <h2 class="text-center mb-10 md:mb-0">Stel je 4-cijferige PIN in:</h2>
+
+      <form id="createPinForm" class="flex flex-col gap-8">
+        <div class="flex flex-col gap-2 w-full max-w-[400px] mx-auto">
+          <label for="newPin">Nieuwe PIN:</label>
+          <input
+            type="password"
+            id="newPin"
+            name="newPin"
+            maxlength="4"
+            required
+            class="form-input bg-input-bg rounded-full border-solid border border-neutral-600"
+          />
+        </div>
+
+        <div class="flex flex-col gap-2 w-full max-w-[400px] mx-auto">
+          <label for="confirmPin">Bevestig PIN:</label>
+          <input
+            type="password"
+            id="confirmPin"
+            name="confirmPin"
+            maxlength="4"
+            required
+            class="form-input bg-input-bg rounded-full border-solid border border-neutral-600"
+          />
+        </div>
+
+        <button type="submit" class="cursor-pointer button bg-spc-green">
+          <h2>PIN instellen</h2>
+        </button>
+      </form>
+    </section>
+  </body>
+</html>

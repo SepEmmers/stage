@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Admin Login</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js" integrity="sha512-v2CJ7UaYy4JwqLDIrZUI/4hqeoQieOmAZNXBeQyjo21dadnwR+8ZaIJVT8EE2iyI61OV8e6M8PP2/4hpQINQ/g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+
+<div class="login-container">
+    <a href="index.html">personeel-login</a>
+    <h2>Admin Login</h2>
+    <div id="message"></div>
+    <div class="form-group">
+        <label for="email">E-mail:</label>
+        <input type="text" id="email" name="email" required>
+    </div>
+    <div class="form-group">
+        <label for="password">Wachtwoord:</label>
+        <input type="password" id="password" name="password" required>
+    </div>
+    <button id="loginBtn">Inloggen</button>
+</div>
+
+<script>
+$(document).ready(function() {
+    $("#loginBtn").click(function(e) {
+        e.preventDefault(); // Voorkom standaard formuliergedrag
+
+        var email = $("#email").val();
+        var password = $("#password").val();
+        var messageDiv = $("#message");
+
+        $.ajax({
+            url: 'login_admin.php', // Het PHP bestand dat de login verwerkt
+            type: 'POST',
+            data: {
+                email: email,
+                password: password
+            },
+            dataType: 'json', // Verwacht een JSON response van de server
+            success: function(response) {
+                if (response.success) {
+                    messageDiv.removeClass('error').addClass('success').text(response.message);
+                    // Redirect de admin naar de gewenste pagina na succesvolle login
+                    window.location.href = 'adminstart.php'; // Vervang dit door de juiste URL voor het admin dashboard
+                } else {
+                    messageDiv.removeClass('success').addClass('error').text(response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error("AJAX error:", status, error);
+                messageDiv.removeClass('success').addClass('error').text("Er is een fout opgetreden tijdens het inloggen.");
+            }
+        });
+    });
+});
+</script>
+
+</body>
+</html>
