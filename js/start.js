@@ -5,9 +5,14 @@ let huidigJaarKalender, huidigeMaandKalender;
 let currentYearPickerYear; // Om het huidige startjaar van de picker bij te houden
 
 // Break Timer Variables
-let breakTimerInterval = null;
-let breakCurrentTimeInSeconds = 0;
-let isBreakTimerRunning = false;
+let breakTimerInterval = null; // Tracks the JS setInterval for visual updates
+let breakCurrentTimeInSeconds = 0; // Represents the value shown on the timer display
+let isBreakTimerRunning = false; // Tracks if the break is logically running (e.g., not paused)
+
+// New Global Variables for Persistent Break Timer
+let serverBreakStartTime = null; // Stores 'current_break_start_timestamp' from server (string or null)
+let clientSideCalculatedAccumulatedSeconds = 0; // Stores 'current_break_accumulated_seconds_before_pause' from server, then updated by client on pause
+let clientBreakSegmentStartEpoch = null; // JS Date.now() when break starts/resumes on client
 
 // Functie om het aantal dagen in een maand te bepalen
 // https://stackoverflow.com/questions/1184334/get-number-days-in-a-specified-month-using-javascript
@@ -99,13 +104,36 @@ function ajaxcall() {
       // 'data' is HIER AL HET JAVASCRIPT OBJECT
       console.log("Start info data ontvangen:", data); // Nu zou je het object moeten zien
 
-      // --- FIX: VERWIJDER JSON.parse ---
-      // let startInfo = JSON.parse(data); // DEZE REGEL MOET WEG
       let startInfo = data; // GEBRUIK 'data' DIRECT ALS HET startInfo OBJECT
-      // --- EINDE FIX ---
 
       // Voeg eventueel een extra check toe of startInfo wel een object is
       if (startInfo && typeof startInfo === "object") {
+        // Initialize break state variables from server data
+        serverBreakStartTime = startInfo.current_break_start_timestamp; 
+        clientSideCalculatedAccumulatedSeconds = startInfo.current_break_accumulated_seconds_before_pause || 0;
+
+        if (serverBreakStartTime) {
+            // Break was running when user last left or server state was last updated
+            // Assuming serverBreakStartTime is a string like "YYYY-MM-DD HH:MM:SS" from MySQL DATETIME (implicitly UTC or server local)
+            // To parse it reliably as UTC for calculations:
+            const serverStartTimeEpoch = new Date(serverBreakStartTime.replace(" ", "T") + "Z").getTime();
+            const elapsedSinceServerStart = (Date.now() - serverStartTimeEpoch) / 1000; // in seconds
+            
+            breakCurrentTimeInSeconds = clientSideCalculatedAccumulatedSeconds + Math.max(0, elapsedSinceServerStart);
+            isBreakTimerRunning = true; // Indicates break is logically running
+            clientBreakSegmentStartEpoch = serverStartTimeEpoch; // To continue counting from this point if user enters break mode
+        } else {
+            // Break was paused or not active
+            breakCurrentTimeInSeconds = clientSideCalculatedAccumulatedSeconds;
+            isBreakTimerRunning = false; // Indicates break is logically paused
+            clientBreakSegmentStartEpoch = null; // Not actively timing a segment
+        }
+        // Update the timer display in the hidden break UI, so it's correct if user enters break mode
+        const timerDisplayElement = document.getElementById('timerDisplay');
+        if (timerDisplayElement) {
+            timerDisplayElement.textContent = formatTime(Math.max(0, Math.round(breakCurrentTimeInSeconds)));
+        }
+
         // --- Rest van je logica blijft hetzelfde ---
         const naamDisplay = document.getElementById("naamDisplay");
         if (naamDisplay && startInfo.personeelsnaam) {
@@ -335,55 +363,50 @@ function stopWerkuur() {
 
         if (isInsideAnyPolygon) {
           if (confirm("Weet je zeker dat je het werkuur wilt stoppen?")) {
+            let finalTotalBreakSeconds = 0;
+            if (isBreakTimerRunning && clientBreakSegmentStartEpoch) { // Break was running actively when work stopped
+                const elapsedThisSegment = (Date.now() - clientBreakSegmentStartEpoch) / 1000;
+                finalTotalBreakSeconds = clientSideCalculatedAccumulatedSeconds + elapsedThisSegment;
+            } else { // Break was paused or never started/resumed in this client session view
+                finalTotalBreakSeconds = clientSideCalculatedAccumulatedSeconds;
+            }
+            finalTotalBreakSeconds = Math.round(finalTotalBreakSeconds);
+
             $.ajax({
               url: "API.php",
               type: "POST",
               data: {
-                action: "stop_werkuur",
-                personeel_fk: personeel_id_van_login,
+                action: "stop_werkuur", // PHP uses $_SESSION['personeel_id']
+                total_final_break_seconds: finalTotalBreakSeconds
               },
-              success: function (data) {
-                console.log("Stop werkuur response ontvangen:", data);
-                let response;
-                try {
-                  // Veiliger parsen van JSON
-                  response = data;
-                } catch (e) {
-                  console.error(
-                    "Fout bij parsen JSON response (stop):",
-                    e,
-                    data
-                  );
-                  alert(
-                    "Er is een onverwachte serverfout opgetreden bij het stoppen."
-                  );
-                  return;
-                }
-
-                // Controleer of de API een success property teruggeeft (pas dit aan indien nodig)
+              dataType: "json", // Expecting JSON response from the updated API
+              success: function (response) { // 'response' is already a JS object
+                console.log("Stop werkuur response ontvangen:", response);
+                
                 if (response.success) {
-                  console.log("Werkuur gestopt!");
-                  if (startButton && stopButton) {
-                    startButton.style.display = "block";
-                    stopButton.style.display = "none";
-                  }
-                  ajaxcall(); // Belangrijk om status te updaten
+                  console.log("Werkuur gestopt, break time recorded.");
+                  // Reset client-side break variables
+                  serverBreakStartTime = null;
+                  clientSideCalculatedAccumulatedSeconds = 0;
+                  breakCurrentTimeInSeconds = 0;
+                  isBreakTimerRunning = false; // Logical break state
+                  clientBreakSegmentStartEpoch = null;
+                  if (breakTimerInterval) clearInterval(breakTimerInterval); // Clear visual timer
+                  
+                  // Update UI: show Start button, hide Stop button, refresh general info
+                  // ajaxcall() will handle this and also reset the timer display in break UI to 00:00
+                  ajaxcall(); 
                 } else {
-                  alert(
-                    "Er is een fout opgetreden bij het stoppen van het werkuur." +
-                      (response.error ? `\nFout: ${response.error}` : "") // Toon serverfout indien beschikbaar
-                  );
-                  console.error(
-                    "Fout bij stoppen werkuur (API):",
-                    response.error || "Onbekende API fout"
-                  );
+                  alert("Fout bij stoppen werkuur: " + (response.message || "Onbekende fout."));
+                  console.error("Fout bij stoppen werkuur (API):", response.message || response.error || "Onbekende API fout");
                 }
               },
               error: function (xhr, status, error) {
                 console.error(
                   "Fout bij het stoppen van het werkuur (AJAX):",
                   status,
-                  error
+                  error,
+                  xhr.responseText
                 );
                 alert("Communicatiefout bij het stoppen van het werkuur.");
               },
@@ -811,10 +834,39 @@ document.addEventListener("DOMContentLoaded", function () {
   // Event listeners for break mode
   if (breakButton) {
       breakButton.addEventListener('click', function() {
-          // Before entering break mode, we might want to check if work is active.
-          // For now, the plan allows break to be started regardless of work state,
-          // and toggleBreakMode will hide the main start/stop work buttons.
-          toggleBreakMode(true);
+          // Reset client-side counters for a new break sequence
+          clientSideCalculatedAccumulatedSeconds = 0; 
+          breakCurrentTimeInSeconds = 0; // Display will start from 0
+          clientBreakSegmentStartEpoch = Date.now(); // Mark start of this segment
+          
+          $.ajax({
+              url: 'API.php',
+              type: 'POST',
+              data: {
+                  action: 'start_break',
+                  client_timestamp_ms: clientBreakSegmentStartEpoch // Send the client's perceived start time
+              },
+              dataType: 'json',
+              success: function(response) {
+                  if (response.status === 'success') {
+                      isBreakTimerRunning = true; // JS timer will be started by toggleBreakMode
+                      // serverBreakStartTime will be updated by the next ajaxcall, or can be set here if needed for immediate consistency
+                      // For now, we assume ajaxcall() will refresh it soon or it's implicitly handled by UI flow.
+                      // Approximate server time for consistency if needed before next ajaxcall
+                      serverBreakStartTime = new Date(clientBreakSegmentStartEpoch).toISOString().slice(0, 19).replace('T', ' ');
+                      
+                      toggleBreakMode(true); // Shows UI, handles button states, and should call startBreakTimer
+                  } else {
+                      alert('Error starting break: ' + (response.message || 'Unknown error'));
+                      // If API fails, reset clientBreakSegmentStartEpoch as the segment didn't really start server-side
+                      clientBreakSegmentStartEpoch = null;
+                  }
+              },
+              error: function() {
+                  alert('API communication error starting break.');
+                  clientBreakSegmentStartEpoch = null; // Reset on error
+              }
+          });
       });
   } else {
       console.error("Break knop niet gevonden!");
@@ -822,23 +874,102 @@ document.addEventListener("DOMContentLoaded", function () {
 
   if (stopBreakButton) {
       stopBreakButton.addEventListener('click', function() {
-          toggleBreakMode(false);
-          // toggleBreakMode(false) calls ajaxcall() which should restore work button states.
+          if (breakTimerInterval) clearInterval(breakTimerInterval); // Stop JS interval
+          // The logical state (isBreakTimerRunning, serverBreakStartTime, clientSideCalculatedAccumulatedSeconds, clientBreakSegmentStartEpoch)
+          // remains as is, reflecting the true state of the break.
+          // breakCurrentTimeInSeconds also holds the last displayed value.
+          toggleBreakMode(false); // Hides break UI, shows main UI. ajaxcall() inside will refresh main buttons.
       });
   } else {
       console.error("Stop Break knop niet gevonden!");
   }
 
   if (playButton) {
-      playButton.addEventListener('click', startBreakTimer);
+      playButton.addEventListener('click', function() {
+          clientBreakSegmentStartEpoch = Date.now(); // New start for this running portion
+
+          $.ajax({
+              url: 'API.php',
+              type: 'POST',
+              data: {
+                  action: 'resume_break',
+                  client_timestamp_ms: clientBreakSegmentStartEpoch
+              },
+              dataType: 'json',
+              success: function(response) {
+                  if (response.status === 'success') {
+                      isBreakTimerRunning = true; // Logically, the break is running
+                      // serverBreakStartTime will be updated by API, but for immediate UI consistency:
+                      serverBreakStartTime = new Date(clientBreakSegmentStartEpoch).toISOString().slice(0, 19).replace('T', ' ');
+                      
+                      // startBreakTimer will handle button states and the visual interval
+                      startBreakTimer(); 
+                  } else {
+                      alert('Error resuming break: ' + (response.message || 'Unknown error'));
+                      // If API fails, don't consider the segment started
+                      clientBreakSegmentStartEpoch = null;
+                  }
+              },
+              error: function() {
+                  alert('API communication error resuming break.');
+                  clientBreakSegmentStartEpoch = null;
+              }
+          });
+      });
   } else {
       console.error("Play knop (pauze) niet gevonden!");
   }
 
   if (pauseButton) {
-      pauseButton.addEventListener('click', pauseBreakTimer);
-      // Initial state (disabled) for pauseButton is set within toggleBreakMode(true)
-      // when break mode is entered.
+      pauseButton.addEventListener('click', function() {
+          if (!isBreakTimerRunning && !clientBreakSegmentStartEpoch) {
+              // Not logically running or no segment started, UI buttons might be out of sync
+              if(document.getElementById('playButton')) document.getElementById('playButton').disabled = false;
+              if(document.getElementById('pauseButton')) document.getElementById('pauseButton').disabled = true;
+              return;
+          }
+
+          if (breakTimerInterval) clearInterval(breakTimerInterval); // Stop JS visual interval
+
+          // Calculate elapsed time for the current segment and add to total
+          const elapsedThisSegment = clientBreakSegmentStartEpoch ? (Date.now() - clientBreakSegmentStartEpoch) / 1000 : 0;
+          clientSideCalculatedAccumulatedSeconds += elapsedThisSegment;
+          breakCurrentTimeInSeconds = clientSideCalculatedAccumulatedSeconds; // Update display to final paused time
+          clientBreakSegmentStartEpoch = null; // Mark segment as paused/ended
+
+          $.ajax({
+              url: 'API.php',
+              type: 'POST',
+              data: {
+                  action: 'pause_break',
+                  accumulated_seconds: Math.round(clientSideCalculatedAccumulatedSeconds)
+              },
+              dataType: 'json',
+              success: function(response) {
+                  if (response.status === 'success') {
+                      isBreakTimerRunning = false; // Logically paused
+                      serverBreakStartTime = null; // Server confirms break is not actively running from a 'start' timestamp perspective
+                      
+                      // Update UI timer display one last time to be sure
+                      const timerDisplayElement = document.getElementById('timerDisplay');
+                      if (timerDisplayElement) {
+                          timerDisplayElement.textContent = formatTime(Math.max(0, Math.round(breakCurrentTimeInSeconds)));
+                      }
+                      if (document.getElementById('playButton')) document.getElementById('playButton').disabled = false;
+                      if (document.getElementById('pauseButton')) document.getElementById('pauseButton').disabled = true;
+                  } else {
+                      alert('Error pausing break: ' + (response.message || 'Unknown error'));
+                      // Re-enable segment timing if API failed? Or leave as paused UI?
+                      // For now, UI reflects the pause attempt. If API failed, clientSideCalculatedAccumulatedSeconds might be off from server.
+                      // Re-sync via ajaxcall() might be needed or a specific error handling strategy.
+                      // For simplicity, we assume UI reflects what we told the server.
+                  }
+              },
+              error: function() {
+                  alert('API communication error pausing break.');
+              }
+          });
+      });
   } else {
       console.error("Pause knop (pauze) niet gevonden!");
   }
@@ -870,78 +1001,112 @@ function formatTime(totalSeconds) {
 function toggleBreakMode(isInBreakMode) {
     const helloMessageContainer = document.getElementById('helloMessageContainer');
     const timerDisplayContainer = document.getElementById('timerDisplayContainer');
-    const startButton = document.getElementById('startButton'); // Original start work button
-    const breakButton = document.getElementById('breakButton'); // Button to initiate break
-    const breakControlsContainer = document.getElementById('breakControlsContainer'); // Contains Play, Pause, Stop Break
-    const stopButton = document.getElementById('stopButton'); // Original stop work button
-    // const mainButtonsSection = document.getElementById('mainButtonsSection'); // Parent of startButton/breakButton and stopButton - Not directly needed for style changes here
+    const mainStartWorkButton = document.getElementById('startButton'); 
+    const mainBreakButton = document.getElementById('breakButton'); 
+    const breakControlsContainer = document.getElementById('breakControlsContainer');
+    const mainStopWorkButton = document.getElementById('stopButton'); 
+    const timerDisplayElement = document.getElementById('timerDisplay');
+    const playButton = document.getElementById('playButton');
+    const pauseButton = document.getElementById('pauseButton');
 
     if (isInBreakMode) {
-        // Enter Break Mode
+        // --- ENTERING BREAK MODE UI ---
         if (helloMessageContainer) helloMessageContainer.style.display = 'none';
-        if (timerDisplayContainer) timerDisplayContainer.style.display = 'block'; // Show timer
-        if (startButton) startButton.style.display = 'none'; // Hide Start Work
-        if (breakButton) breakButton.style.display = 'none'; // Hide Break button
-        if (breakControlsContainer) breakControlsContainer.style.display = 'block'; // Show Play, Pause, Stop Break
-        if (stopButton) stopButton.style.display = 'none'; // Also hide the main Stop Work button
+        if (timerDisplayContainer) timerDisplayContainer.style.display = 'block';
+        if (mainStartWorkButton) mainStartWorkButton.style.display = 'none';
+        if (mainBreakButton) mainBreakButton.style.display = 'none';
+        if (breakControlsContainer) breakControlsContainer.style.display = 'block';
+        if (mainStopWorkButton) mainStopWorkButton.style.display = 'none';
 
-        breakCurrentTimeInSeconds = 0;
-        if (document.getElementById('timerDisplay')) document.getElementById('timerDisplay').textContent = formatTime(breakCurrentTimeInSeconds);
-        isBreakTimerRunning = false;
-        if (breakTimerInterval) clearInterval(breakTimerInterval);
+        // Initialize timer display with the current break time (could be > 0 if resuming from page reload)
+        if (timerDisplayElement) {
+            timerDisplayElement.textContent = formatTime(Math.max(0, Math.round(breakCurrentTimeInSeconds)));
+        }
         
-        if(document.getElementById('playButton')) document.getElementById('playButton').disabled = false;
-        if(document.getElementById('pauseButton')) document.getElementById('pauseButton').disabled = true;
+        // If the break is logically running (or just started/resumed), start the JS interval
+        // isBreakTimerRunning reflects the logical state (true if running, false if paused)
+        if (isBreakTimerRunning) { 
+            startBreakTimer(); // This will disable play, enable pause, and start interval
+        } else {
+            // Break is paused (e.g., page reloaded while break was paused)
+            if (playButton) playButton.disabled = false;
+            if (pauseButton) pauseButton.disabled = true;
+            if (breakTimerInterval) clearInterval(breakTimerInterval); // Ensure no stray interval is running
+        }
 
     } else {
-        // Exit Break Mode
+        // --- EXITING BREAK MODE UI (returning to main screen) ---
         if (helloMessageContainer) helloMessageContainer.style.display = 'flex'; 
-        if (timerDisplayContainer) timerDisplayContainer.style.display = 'none'; // Hide timer
-        if (startButton) startButton.style.display = 'flex'; 
-        if (breakButton) breakButton.style.display = 'flex'; 
-        if (breakControlsContainer) breakControlsContainer.style.display = 'none'; // Hide Play, Pause, Stop Break
+        if (timerDisplayContainer) timerDisplayContainer.style.display = 'none'; 
+        // Main work buttons (startButton, breakButton, stopButton) visibility will be handled by ajaxcall()
+        if (mainStartWorkButton) mainStartWorkButton.style.display = 'flex'; // Temporary, ajaxcall will refine
+        if (mainBreakButton) mainBreakButton.style.display = 'flex';   // Temporary, ajaxcall will refine
+        if (breakControlsContainer) breakControlsContainer.style.display = 'none'; 
+        
+        if (breakTimerInterval) clearInterval(breakTimerInterval); // Stop JS visual interval when exiting break screen
+        // DO NOT reset breakCurrentTimeInSeconds, clientSideCalculatedAccumulatedSeconds, serverBreakStartTime, or isBreakTimerRunning (logical state) here.
+        // These variables hold the actual state of the break.
         
         if (typeof ajaxcall === 'function') {
-           ajaxcall();
+           ajaxcall(); // Refresh main button states and potentially re-sync break info
         } else {
            console.error("ajaxcall function not found. Main button states may be incorrect.");
-           // Fallback: if ajaxcall isn't there, at least ensure stopButton is hidden if startButton is shown.
-           if (stopButton && startButton && startButton.style.display !== 'none') {
-               stopButton.style.display = 'none';
+           if (mainStopWorkButton && mainStartWorkButton && mainStartWorkButton.style.display !== 'none') {
+               mainStopWorkButton.style.display = 'none';
            }
         }
-
-        if (isBreakTimerRunning) {
-            clearInterval(breakTimerInterval);
-            isBreakTimerRunning = false;
-        }
-        breakCurrentTimeInSeconds = 0;
-        if (document.getElementById('timerDisplay')) document.getElementById('timerDisplay').textContent = formatTime(0);
     }
 }
 
 // Timer logic functions
-function startBreakTimer() {
-    if (isBreakTimerRunning) return; // Already running
+function startBreakTimer() { 
+    // isBreakTimerRunning (logical state) should be true if this is called.
+    // This function handles the visual interval timer.
+    const playButton = document.getElementById('playButton');
+    const pauseButton = document.getElementById('pauseButton');
+    const timerDisplayElement = document.getElementById('timerDisplay');
 
-    isBreakTimerRunning = true;
-    if(document.getElementById('playButton')) document.getElementById('playButton').disabled = true; 
-    if(document.getElementById('pauseButton')) document.getElementById('pauseButton').disabled = false;
+    if (playButton) playButton.disabled = true;
+    if (pauseButton) pauseButton.disabled = false;
+
+    // Update display immediately with the current state before interval starts.
+    // breakCurrentTimeInSeconds should have been updated by ajaxcall or button handlers.
+    if (timerDisplayElement) {
+        timerDisplayElement.textContent = formatTime(Math.max(0, Math.round(breakCurrentTimeInSeconds)));
+    }
+
+    if (breakTimerInterval) clearInterval(breakTimerInterval); // Clear any existing interval
 
     breakTimerInterval = setInterval(() => {
-        breakCurrentTimeInSeconds++;
-        if (document.getElementById('timerDisplay')) {
-            document.getElementById('timerDisplay').textContent = formatTime(breakCurrentTimeInSeconds);
+        let currentDisplayTime;
+        if (clientBreakSegmentStartEpoch) { // Actively timing a segment
+             const elapsedThisSegment = (Date.now() - clientBreakSegmentStartEpoch) / 1000; // in seconds
+             currentDisplayTime = clientSideCalculatedAccumulatedSeconds + elapsedThisSegment;
+        } else { // Should not happen if startBreakTimer is called when logically running, but as a fallback:
+             currentDisplayTime = clientSideCalculatedAccumulatedSeconds; // Or breakCurrentTimeInSeconds
+        }
+        breakCurrentTimeInSeconds = currentDisplayTime; // Update global for display
+        
+        if (timerDisplayElement) {
+            timerDisplayElement.textContent = formatTime(Math.max(0, Math.round(breakCurrentTimeInSeconds)));
         }
     }, 1000);
 }
 
 function pauseBreakTimer() {
-    if (!isBreakTimerRunning) return; // Not running
+    // This function will be modified later by step 6.
+    // For now, keep the old logic or a placeholder if it was removed.
+    // The existing pauseBreakTimer logic from previous task was:
+    if (!isBreakTimerRunning && !clientBreakSegmentStartEpoch) { // Check if it's actually running or if a segment has started
+        if(document.getElementById('playButton')) document.getElementById('playButton').disabled = false;
+        if(document.getElementById('pauseButton')) document.getElementById('pauseButton').disabled = true; 
+        return;
+    }
 
-    isBreakTimerRunning = false;
+    isBreakTimerRunning = false; // This refers to the JS interval; logical state handled by API response.
     if(document.getElementById('playButton')) document.getElementById('playButton').disabled = false;
     if(document.getElementById('pauseButton')) document.getElementById('pauseButton').disabled = true; 
 
     clearInterval(breakTimerInterval);
+    // The rest of pause logic (API call, updating accumulated seconds) will be in the event handler.
 }

@@ -13,6 +13,42 @@ if (!isset($conn) || !$conn instanceof mysqli) {
     exit(); // Stop verdere uitvoering
 }
 
+// Helper function to get the active pk_werkuren for a given personeel_fk
+function getActiveWerkuurId($conn, $personeel_fk) {
+    if (!$personeel_fk) {
+        return null;
+    }
+    // Ensure $conn is a mysqli object
+    if (!$conn || !($conn instanceof mysqli)) {
+        error_log("getActiveWerkuurId: Invalid database connection.");
+        return null;
+    }
+
+    $sql = "SELECT pk_werkuren FROM werkuren WHERE personeel_fk = ? AND eindtijd IS NULL ORDER BY starttijd DESC LIMIT 1";
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        error_log("getActiveWerkuurId: Prepare failed: " . $conn->error);
+        return null;
+    }
+
+    $stmt->bind_param("i", $personeel_fk);
+    if (!$stmt->execute()) {
+        error_log("getActiveWerkuurId: Execute failed: " . $stmt->error);
+        $stmt->close();
+        return null;
+    }
+
+    $result = $stmt->get_result();
+    if ($result && $result->num_rows > 0) {
+        $row = $result->fetch_assoc();
+        $stmt->close();
+        return (int)$row['pk_werkuren'];
+    } else {
+        $stmt->close();
+        return null;
+    }
+}
+
 // Bepaal de actie op basis van de 'action' parameter in de POST data
 if (isset($_POST['action'])) {
     $action = $_POST['action'];
@@ -47,46 +83,64 @@ if (isset($_POST['action'])) {
                     if ($result && $result->num_rows > 0) {
                         $start_info_raw = $result->fetch_assoc(); // Haal de rij met data op
 
-                        // Verwerk de polygonen JSON string uit de database
-                        $polygons_array = []; // Start met een lege array voor de polygonen
-                        if (isset($start_info_raw['polygons_json']) && !empty($start_info_raw['polygons_json'])) {
-                            // 1. Decodeer de hoofd JSON array string (die JSON strings van polygonen bevat)
-                            $polygon_strings_array = json_decode($start_info_raw['polygons_json'], true); // true voor associatieve array
+                        // Initialize $output_data with values from usp_GetEnhancedStartInfo
+                        $output_data = [
+                            'personeelsnaam' => $start_info_raw['personeelsnaam'] ?? null,
+                            'isWerkuurGestart' => isset($start_info_raw['isWerkuurGestart']) ? (bool)$start_info_raw['isWerkuurGestart'] : false,
+                            'isVandaagAlGewerktofGestopt' => isset($start_info_raw['isVandaagAlGewerktofGestopt']) ? (bool)$start_info_raw['isVandaagAlGewerktofGestopt'] : false,
+                            'polygons' => [], // Default to empty, will be populated below
+                            'current_break_start_timestamp' => null,
+                            'current_break_accumulated_seconds_before_pause' => 0
+                        ];
 
-                            // Controleer of het decoderen een array opleverde
+                        // Verwerk de polygonen JSON string uit de database
+                        if (isset($start_info_raw['polygons_json']) && !empty($start_info_raw['polygons_json'])) {
+                            $polygon_strings_array = json_decode($start_info_raw['polygons_json'], true);
                             if (is_array($polygon_strings_array)) {
-                                // 2. Loop door elke polygon coordinate string in de array
                                 foreach ($polygon_strings_array as $coord_string) {
-                                    // 3. Decodeer de individuele JSON string van één polygoon
-                                    if (is_string($coord_string)) { // Controleer of het een string is
-                                        $decoded_poly = json_decode($coord_string, true); // true voor associatieve array
-                                        // 4. Voeg toe aan de uiteindelijke array als het decoderen gelukt is
+                                    if (is_string($coord_string)) {
+                                        $decoded_poly = json_decode($coord_string, true);
                                         if (is_array($decoded_poly)) {
-                                            $polygons_array[] = $decoded_poly;
+                                            $output_data['polygons'][] = $decoded_poly;
                                         }
                                     }
                                 }
                             }
                         }
 
-                        // Bouw de JSON response voor de frontend
-                        $output_data = [
-                            // Neem personeelsnaam over (gebruik null coalescing voor veiligheid)
-                            'personeelsnaam' => $start_info_raw['personeelsnaam'] ?? null,
-                            // Converteer database 0/1 naar echte booleans
-                            'isWerkuurGestart' => isset($start_info_raw['isWerkuurGestart']) ? (bool)$start_info_raw['isWerkuurGestart'] : false,
-                            'isVandaagAlGewerktofGestopt' => isset($start_info_raw['isVandaagAlGewerktofGestopt']) ? (bool)$start_info_raw['isVandaagAlGewerktofGestopt'] : false,
-                            // Voeg de verwerkte array met polygonen toe
-                            'polygons' => $polygons_array
-                            // Eventueel 'success' status toevoegen:
-                            // 'success' => isset($start_info_raw['success']) ? (bool)$start_info_raw['success'] : true
-                        ];
+                        // Fetch break data if a work hour is started
+                        if ($output_data['isWerkuurGestart']) {
+                            $active_werkuur_id = getActiveWerkuurId($conn, $personeel_id); // Use personeel_id from the outer scope
+                            if ($active_werkuur_id) {
+                                $stmt_break_data = $conn->prepare("SELECT current_break_start_timestamp, current_break_accumulated_seconds_before_pause FROM werkuren WHERE pk_werkuren = ?");
+                                if ($stmt_break_data) {
+                                    $stmt_break_data->bind_param("i", $active_werkuur_id);
+                                    $stmt_break_data->execute();
+                                    $result_break_data = $stmt_break_data->get_result();
+                                    $break_data = $result_break_data->fetch_assoc();
+                                    $stmt_break_data->close();
 
+                                    if ($break_data) {
+                                        $output_data['current_break_start_timestamp'] = $break_data['current_break_start_timestamp'];
+                                        $output_data['current_break_accumulated_seconds_before_pause'] = (int)$break_data['current_break_accumulated_seconds_before_pause'];
+                                    }
+                                } else {
+                                    error_log("Prepare statement failed for break data: " . $conn->error);
+                                }
+                            }
+                        }
                         echo json_encode($output_data);
 
                     } else {
-                        // Geen resultaat gevonden door de stored procedure
-                        echo json_encode(['error' => 'Kon startinformatie niet ophalen (geen data).', 'personeel_id' => $personeel_id]);
+                        // Geen resultaat gevonden door de stored procedure usp_GetEnhancedStartInfo
+                        // Still provide default break data structure
+                        echo json_encode([
+                            'error' => 'Kon startinformatie niet ophalen (geen data).', 
+                            'personeel_id' => $personeel_id,
+                            'current_break_start_timestamp' => null,
+                            'current_break_accumulated_seconds_before_pause' => 0,
+                            'isWerkuurGestart' => false // Explicitly set
+                        ]);
                     }
                     // Sluit het statement
                     $stmt->close();
@@ -95,17 +149,121 @@ if (isset($_POST['action'])) {
                     while (mysqli_next_result($conn)) { if (!mysqli_more_results($conn)) break; }
 
                 } else {
-                    // Fout bij het voorbereiden van de SQL statement
+                    // Fout bij het voorbereiden van de SQL statement voor usp_GetEnhancedStartInfo
                     error_log("Prepare statement failed for usp_GetEnhancedStartInfo: " . $conn->error); // Log de fout server-side
-                    echo json_encode(['error' => 'Databasefout bij voorbereiden.', 'details' => $conn->error]); // Stuur generieke fout naar client
+                    echo json_encode([
+                        'error' => 'Databasefout bij voorbereiden.', 
+                        'details' => $conn->error,
+                        'current_break_start_timestamp' => null,
+                        'current_break_accumulated_seconds_before_pause' => 0,
+                        'isWerkuurGestart' => false // Explicitly set
+                    ]);
                 }
 
             } else {
                 // Benodigde parameter 'personeel_fk' ontbreekt
-                echo json_encode(['error' => 'Personeel FK niet gespecificeerd.']);
+                echo json_encode([
+                    'error' => 'Personeel FK niet gespecificeerd.',
+                    'current_break_start_timestamp' => null,
+                    'current_break_accumulated_seconds_before_pause' => 0,
+                    'isWerkuurGestart' => false // Explicitly set
+                ]);
             }
             break;
         // --- *** EINDE BIJGEWERKTE CASE GET_START_INFO *** ---
+
+        case 'start_break':
+            // header('Content-Type: application/json'); // Already set globally
+            $personeel_fk = $_SESSION['personeel_id'] ?? null;
+            if (!$personeel_fk) { echo json_encode(['status' => 'error', 'message' => 'User not logged in.']); exit; }
+
+            $active_werkuur_id = getActiveWerkuurId($conn, $personeel_fk);
+            $client_timestamp_ms = isset($_POST['client_timestamp_ms']) ? $_POST['client_timestamp_ms'] : null;
+
+            if ($active_werkuur_id && $client_timestamp_ms) {
+                // Convert milliseconds to a MySQL DATETIME format (YYYY-MM-DD HH:MM:SS)
+                // Assuming client_timestamp_ms is UTC. If it's local, further conversion might be needed.
+                $server_timestamp_formatted = gmdate("Y-m-d H:i:s", $client_timestamp_ms / 1000);
+                
+                $stmt = $conn->prepare("CALL SP_SetBreakStartTimestamp(?, ?)");
+                if ($stmt) {
+                    $stmt->bind_param("is", $active_werkuur_id, $server_timestamp_formatted);
+                    if ($stmt->execute()) {
+                        echo json_encode(['status' => 'success', 'message' => 'Break started']);
+                    } else {
+                        error_log("Execute failed for SP_SetBreakStartTimestamp: " . $stmt->error);
+                        echo json_encode(['status' => 'error', 'message' => 'Failed to start break (SP execution)', 'details' => $stmt->error]);
+                    }
+                    $stmt->close();
+                    while (mysqli_next_result($conn)) { if (!mysqli_more_results($conn)) break; }
+                } else {
+                    error_log("Prepare statement failed for SP_SetBreakStartTimestamp: " . $conn->error);
+                    echo json_encode(['status' => 'error', 'message' => 'Database error: ' . $conn->error]);
+                }
+            } else {
+                echo json_encode(['status' => 'error', 'message' => 'Missing parameters or no active work session.']);
+            }
+            break;
+
+        case 'pause_break':
+            // header('Content-Type: application/json'); // Already set globally
+            $personeel_fk = $_SESSION['personeel_id'] ?? null;
+            if (!$personeel_fk) { echo json_encode(['status' => 'error', 'message' => 'User not logged in.']); exit; }
+
+            $active_werkuur_id = getActiveWerkuurId($conn, $personeel_fk);
+            $accumulated_seconds = isset($_POST['accumulated_seconds']) ? (int)$_POST['accumulated_seconds'] : null;
+
+            if ($active_werkuur_id && $accumulated_seconds !== null) {
+                $stmt = $conn->prepare("CALL SP_PauseBreak(?, ?)");
+                if ($stmt) {
+                    $stmt->bind_param("ii", $active_werkuur_id, $accumulated_seconds);
+                    if ($stmt->execute()) {
+                        echo json_encode(['status' => 'success', 'message' => 'Break paused']);
+                    } else {
+                        error_log("Execute failed for SP_PauseBreak: " . $stmt->error);
+                        echo json_encode(['status' => 'error', 'message' => 'Failed to pause break (SP execution)', 'details' => $stmt->error]);
+                    }
+                    $stmt->close();
+                    while (mysqli_next_result($conn)) { if (!mysqli_more_results($conn)) break; }
+                } else {
+                    error_log("Prepare statement failed for SP_PauseBreak: " . $conn->error);
+                    echo json_encode(['status' => 'error', 'message' => 'Database error: ' . $conn->error]);
+                }
+            } else {
+                echo json_encode(['status' => 'error', 'message' => 'Missing parameters or no active work session.']);
+            }
+            break;
+
+        case 'resume_break':
+            // header('Content-Type: application/json'); // Already set globally
+            // This is functionally the same as 'start_break' according to the SQL file (uses SP_SetBreakStartTimestamp)
+            $personeel_fk = $_SESSION['personeel_id'] ?? null;
+            if (!$personeel_fk) { echo json_encode(['status' => 'error', 'message' => 'User not logged in.']); exit; }
+            
+            $active_werkuur_id = getActiveWerkuurId($conn, $personeel_fk);
+            $client_timestamp_ms = isset($_POST['client_timestamp_ms']) ? $_POST['client_timestamp_ms'] : null;
+            
+            if ($active_werkuur_id && $client_timestamp_ms) {
+                $server_timestamp_formatted = gmdate("Y-m-d H:i:s", $client_timestamp_ms / 1000);
+                $stmt = $conn->prepare("CALL SP_SetBreakStartTimestamp(?, ?)"); 
+                if ($stmt) {
+                    $stmt->bind_param("is", $active_werkuur_id, $server_timestamp_formatted);
+                    if ($stmt->execute()) {
+                        echo json_encode(['status' => 'success', 'message' => 'Break resumed']);
+                    } else {
+                        error_log("Execute failed for SP_SetBreakStartTimestamp (resume): " . $stmt->error);
+                        echo json_encode(['status' => 'error', 'message' => 'Failed to resume break (SP execution)', 'details' => $stmt->error]);
+                    }
+                    $stmt->close();
+                    while (mysqli_next_result($conn)) { if (!mysqli_more_results($conn)) break; }
+                } else {
+                    error_log("Prepare statement failed for SP_SetBreakStartTimestamp (resume): " . $conn->error);
+                    echo json_encode(['status' => 'error', 'message' => 'Database error: ' . $conn->error]);
+                }
+            } else {
+                echo json_encode(['status' => 'error', 'message' => 'Missing parameters or no active work session.']);
+            }
+            break;
 
         case 'start_werkuur':
             // Structuur behouden zoals origineel, met kleine checks toegevoegd
@@ -139,28 +297,52 @@ if (isset($_POST['action'])) {
             break;
 
         case 'stop_werkuur':
-            // Structuur behouden zoals origineel, met kleine checks toegevoegd
-            if (isset($_POST['personeel_fk'])) {
-                $personeel_id = (int)$_POST['personeel_fk'];
-                $sql = "CALL usp_StopWerkuur(?)";
-                $stmt = $conn->prepare($sql);
-                if ($stmt) { // Controleer of prepare gelukt is
-                    $stmt->bind_param("i", $personeel_id);
-                    // Controleer of execute succesvol was
-                    if ($stmt->execute()) {
-                        echo json_encode(['success' => true]); // Neem aan dat SP succesvol was
-                    } else {
-                         error_log("Execute failed for usp_StopWerkuur: " . $stmt->error);
-                         echo json_encode(['success' => false, 'error' => 'Kon werkuur niet stoppen.', 'details' => $stmt->error]);
-                    }
-                    $stmt->close();
+            // header('Content-Type: application/json'); // Already set globally
+            $personeel_fk = $_SESSION['personeel_id'] ?? null;
+            if (!$personeel_fk) { 
+                echo json_encode(['success' => false, 'message' => 'User not logged in.']); 
+                exit; 
+            }
+
+            $active_werkuur_id = getActiveWerkuurId($conn, $personeel_fk);
+            // total_final_break_seconds should come from the client, which has been tracking the break time.
+            $total_final_break_seconds = isset($_POST['total_final_break_seconds']) ? (int)$_POST['total_final_break_seconds'] : 0;
+
+            if ($active_werkuur_id) {
+                // Call SP_FinalizeWorkSessionBreaks
+                $stmt_finalize_break = $conn->prepare("CALL SP_FinalizeWorkSessionBreaks(?, ?)");
+                if ($stmt_finalize_break) {
+                    $stmt_finalize_break->bind_param("ii", $active_werkuur_id, $total_final_break_seconds);
+                    $break_finalized_success = $stmt_finalize_break->execute();
+                    $stmt_finalize_break->close();
                     while (mysqli_next_result($conn)) { if (!mysqli_more_results($conn)) break; }
+
+                    if ($break_finalized_success) {
+                        // Now update the eindtijd for the work session
+                        $stmt_stop_work = $conn->prepare("UPDATE werkuren SET eindtijd = NOW() WHERE pk_werkuren = ?");
+                        if ($stmt_stop_work) {
+                            $stmt_stop_work->bind_param("i", $active_werkuur_id);
+                            if ($stmt_stop_work->execute()) {
+                                echo json_encode(['success' => true, 'message' => 'Werkuur gestopt, break time recorded.']);
+                            } else {
+                                error_log("Execute failed for UPDATE werkuren SET eindtijd: " . $stmt_stop_work->error);
+                                echo json_encode(['success' => false, 'message' => 'Werkuur gestopt, but failed to finalize work stop details (update eindtijd).', 'details' => $stmt_stop_work->error]);
+                            }
+                            $stmt_stop_work->close();
+                        } else {
+                            error_log("Prepare statement failed for UPDATE werkuren SET eindtijd: " . $conn->error);
+                            echo json_encode(['success' => false, 'message' => 'Database error during stop werkuur (prepare update eindtijd).', 'details' => $conn->error]);
+                        }
+                    } else {
+                        error_log("Execute failed for SP_FinalizeWorkSessionBreaks: " . ($stmt_finalize_break->error ?? $conn->error)); // $stmt_finalize_break is closed, so error might be on $conn
+                        echo json_encode(['success' => false, 'message' => 'Failed to finalize break times. Work session not stopped.', 'details' => ($stmt_finalize_break->error ?? $conn->error)]);
+                    }
                 } else {
-                    error_log("Prepare statement failed for usp_StopWerkuur: " . $conn->error);
-                    echo json_encode(['success' => false, 'error' => 'Databasefout bij stop.', 'details' => $conn->error]);
+                    error_log("Prepare statement failed for SP_FinalizeWorkSessionBreaks: " . $conn->error);
+                    echo json_encode(['success' => false, 'message' => 'Database error during stop werkuur (prepare SP_FinalizeWorkSessionBreaks).', 'details' => $conn->error]);
                 }
             } else {
-                echo json_encode(['error' => 'Personeel FK niet gespecificeerd.']);
+                echo json_encode(['success' => false, 'message' => 'Geen actieve werksessie gevonden.']);
             }
             break;
 
