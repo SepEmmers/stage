@@ -4,6 +4,11 @@ let huidigeJaar, huidigeMaand;
 let huidigJaarKalender, huidigeMaandKalender;
 let currentYearPickerYear; // Om het huidige startjaar van de picker bij te houden
 
+// Break Timer Variables
+let breakTimerInterval = null;
+let breakCurrentTimeInSeconds = 0;
+let isBreakTimerRunning = false;
+
 // Functie om het aantal dagen in een maand te bepalen
 // https://stackoverflow.com/questions/1184334/get-number-days-in-a-specified-month-using-javascript
 function getDaysInMonth(year, month) {
@@ -774,20 +779,27 @@ document.addEventListener("DOMContentLoaded", function () {
   getPersoneelFK();
 
   const startButton = document.getElementById("startButton");
-  const stopButton = document.getElementById("stopButton");
+  const stopButton = document.getElementById("stopButton"); // Main work stop button
   const historyButton = document.getElementById("historyButton");
-  const displayYearElement = document.getElementById("displayYear");
+  // const displayYearElement = document.getElementById("displayYear"); // Already declared if needed for calendar
+
+  // New elements for break mode
+  const breakButton = document.getElementById('breakButton');
+  const stopBreakButton = document.getElementById('stopBreakButton');
+  const playButton = document.getElementById('playButton');
+  const pauseButton = document.getElementById('pauseButton');
+  // helloMessageContainer, timerDisplayContainer, timerDisplay are primarily accessed within functions
 
   if (startButton) {
     startButton.addEventListener("click", startWerkuur);
   } else {
-    console.error("Start knop niet gevonden!");
+    console.error("Start knop (werk) niet gevonden!");
   }
 
-  if (stopButton) {
+  if (stopButton) { // Main work stop button
     stopButton.addEventListener("click", stopWerkuur);
   } else {
-    console.error("Stop knop niet gevonden!");
+    console.error("Stop knop (werk) niet gevonden!");
   }
 
   if (historyButton) {
@@ -796,6 +808,43 @@ document.addEventListener("DOMContentLoaded", function () {
     console.error("Geschiedenis knop niet gevonden!");
   }
 
+  // Event listeners for break mode
+  if (breakButton) {
+      breakButton.addEventListener('click', function() {
+          // Before entering break mode, we might want to check if work is active.
+          // For now, the plan allows break to be started regardless of work state,
+          // and toggleBreakMode will hide the main start/stop work buttons.
+          toggleBreakMode(true);
+      });
+  } else {
+      console.error("Break knop niet gevonden!");
+  }
+
+  if (stopBreakButton) {
+      stopBreakButton.addEventListener('click', function() {
+          toggleBreakMode(false);
+          // toggleBreakMode(false) calls ajaxcall() which should restore work button states.
+      });
+  } else {
+      console.error("Stop Break knop niet gevonden!");
+  }
+
+  if (playButton) {
+      playButton.addEventListener('click', startBreakTimer);
+  } else {
+      console.error("Play knop (pauze) niet gevonden!");
+  }
+
+  if (pauseButton) {
+      pauseButton.addEventListener('click', pauseBreakTimer);
+      // Initial state (disabled) for pauseButton is set within toggleBreakMode(true)
+      // when break mode is entered.
+  } else {
+      console.error("Pause knop (pauze) niet gevonden!");
+  }
+
+  // Initial display state for main start/stop buttons (stop is initially hidden by default)
+  // This existing logic should correctly hide the main stop button on page load.
   if (startButton && stopButton) {
     stopButton.style.display = "none";
   }
@@ -808,4 +857,91 @@ document.addEventListener("DOMContentLoaded", function () {
 
 function herlaad() {
   location.reload();
+}
+
+// Helper function to format time in MM:SS
+function formatTime(totalSeconds) {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+// Function to toggle UI for break mode
+function toggleBreakMode(isInBreakMode) {
+    const helloMessageContainer = document.getElementById('helloMessageContainer');
+    const timerDisplayContainer = document.getElementById('timerDisplayContainer');
+    const startButton = document.getElementById('startButton'); // Original start work button
+    const breakButton = document.getElementById('breakButton'); // Button to initiate break
+    const breakControlsContainer = document.getElementById('breakControlsContainer'); // Contains Play, Pause, Stop Break
+    const stopButton = document.getElementById('stopButton'); // Original stop work button
+    // const mainButtonsSection = document.getElementById('mainButtonsSection'); // Parent of startButton/breakButton and stopButton - Not directly needed for style changes here
+
+    if (isInBreakMode) {
+        // Enter Break Mode
+        if (helloMessageContainer) helloMessageContainer.style.display = 'none';
+        if (timerDisplayContainer) timerDisplayContainer.style.display = 'block'; // Show timer
+        if (startButton) startButton.style.display = 'none'; // Hide Start Work
+        if (breakButton) breakButton.style.display = 'none'; // Hide Break button
+        if (breakControlsContainer) breakControlsContainer.style.display = 'block'; // Show Play, Pause, Stop Break
+        if (stopButton) stopButton.style.display = 'none'; // Also hide the main Stop Work button
+
+        breakCurrentTimeInSeconds = 0;
+        if (document.getElementById('timerDisplay')) document.getElementById('timerDisplay').textContent = formatTime(breakCurrentTimeInSeconds);
+        isBreakTimerRunning = false;
+        if (breakTimerInterval) clearInterval(breakTimerInterval);
+        
+        if(document.getElementById('playButton')) document.getElementById('playButton').disabled = false;
+        if(document.getElementById('pauseButton')) document.getElementById('pauseButton').disabled = true;
+
+    } else {
+        // Exit Break Mode
+        if (helloMessageContainer) helloMessageContainer.style.display = 'flex'; 
+        if (timerDisplayContainer) timerDisplayContainer.style.display = 'none'; // Hide timer
+        if (startButton) startButton.style.display = 'flex'; 
+        if (breakButton) breakButton.style.display = 'flex'; 
+        if (breakControlsContainer) breakControlsContainer.style.display = 'none'; // Hide Play, Pause, Stop Break
+        
+        if (typeof ajaxcall === 'function') {
+           ajaxcall();
+        } else {
+           console.error("ajaxcall function not found. Main button states may be incorrect.");
+           // Fallback: if ajaxcall isn't there, at least ensure stopButton is hidden if startButton is shown.
+           if (stopButton && startButton && startButton.style.display !== 'none') {
+               stopButton.style.display = 'none';
+           }
+        }
+
+        if (isBreakTimerRunning) {
+            clearInterval(breakTimerInterval);
+            isBreakTimerRunning = false;
+        }
+        breakCurrentTimeInSeconds = 0;
+        if (document.getElementById('timerDisplay')) document.getElementById('timerDisplay').textContent = formatTime(0);
+    }
+}
+
+// Timer logic functions
+function startBreakTimer() {
+    if (isBreakTimerRunning) return; // Already running
+
+    isBreakTimerRunning = true;
+    if(document.getElementById('playButton')) document.getElementById('playButton').disabled = true; 
+    if(document.getElementById('pauseButton')) document.getElementById('pauseButton').disabled = false;
+
+    breakTimerInterval = setInterval(() => {
+        breakCurrentTimeInSeconds++;
+        if (document.getElementById('timerDisplay')) {
+            document.getElementById('timerDisplay').textContent = formatTime(breakCurrentTimeInSeconds);
+        }
+    }, 1000);
+}
+
+function pauseBreakTimer() {
+    if (!isBreakTimerRunning) return; // Not running
+
+    isBreakTimerRunning = false;
+    if(document.getElementById('playButton')) document.getElementById('playButton').disabled = false;
+    if(document.getElementById('pauseButton')) document.getElementById('pauseButton').disabled = true; 
+
+    clearInterval(breakTimerInterval);
 }
