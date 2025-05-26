@@ -1,5 +1,5 @@
 <?php
-$servername = "localhost";
+$servername = "spc.minoffice.be";
 $username = "miniemen_sep";
 $password = "Miniemen123";
 $db = "miniemen_spc";
