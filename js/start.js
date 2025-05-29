@@ -21,18 +21,50 @@ function getDaysInMonth(year, month) {
 }
 
 function isPointInPolygon(point, polygon) {
+  console.log('[GEO_DEBUG] isPointInPolygon received point:', JSON.stringify(point, null, 2), 'and polygon:', JSON.stringify(polygon, null, 2));
+
+  if (!polygon || !Array.isArray(polygon) || polygon.length === 0) {
+    console.error('[GEO_DEBUG] isPointInPolygon: Received empty or invalid polygon array.', polygon);
+    return false;
+  }
+  // Ensure points have latitude and longitude - check the first point as a sample
+  if (polygon[0] && (typeof polygon[0].latitude === 'undefined' || typeof polygon[0].longitude === 'undefined')) {
+    console.error('[GEO_DEBUG] isPointInPolygon: Polygon points do not seem to have "latitude" and "longitude" properties. First point:', JSON.stringify(polygon[0], null, 2));
+    return false;
+  }
+
   const x = point.latitude;
   const y = point.longitude;
   let inside = false;
+
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i].latitude,
-      yi = polygon[i].longitude;
-    const xj = polygon[j].latitude,
-      yj = polygon[j].longitude;
-    const intersect =
-      yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
-    if (intersect) inside = !inside;
+    // Validate each point in the polygon array during iteration
+    if (!polygon[i] || typeof polygon[i].latitude === 'undefined' || typeof polygon[i].longitude === 'undefined') {
+        console.error(`[GEO_DEBUG] isPointInPolygon: Invalid point at index ${i} in polygon:`, JSON.stringify(polygon[i], null, 2));
+        // Skip this iteration or handle error as appropriate
+        continue; 
+    }
+    const xi = polygon[i].latitude, yi = polygon[i].longitude;
+
+    // Also validate polygon[j]
+    if (!polygon[j] || typeof polygon[j].latitude === 'undefined' || typeof polygon[j].longitude === 'undefined') {
+        console.error(`[GEO_DEBUG] isPointInPolygon: Invalid point at index ${j} (previous point) in polygon:`, JSON.stringify(polygon[j], null, 2));
+        // Skip this iteration or handle error as appropriate
+        continue;
+    }
+    const xj = polygon[j].latitude, yj = polygon[j].longitude;
+
+    const intersect = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+    if (intersect) {
+        inside = !inside;
+        // console.log(`[GEO_DEBUG] isPointInPolygon: Intersection found at edge ${i}-${j}. "inside" is now: ${inside}`); // This can be too verbose
+    }
   }
+  
+  if (!inside) { // Log only if the final result is false, to avoid noise from the above more verbose log
+    console.log('[GEO_DEBUG] isPointInPolygon: Point NOT inside polygon after checking all edges.');
+  }
+  console.log('[GEO_DEBUG] isPointInPolygon: Final check, "inside" is:', inside);
   return inside;
 }
 
@@ -145,8 +177,10 @@ function ajaxcall() {
         // console.log("Waarde van startInfo:", startInfo); // Al gelogd
 
         if (startInfo.polygons && Array.isArray(startInfo.polygons)) {
+          console.log('[GEO_DEBUG] Raw schoolPolygons from server (data.polygons):', JSON.stringify(startInfo.polygons, null, 2));
           schoolPolygons = startInfo.polygons; // Wijs de array direct toe
-          console.log(
+          console.log('[GEO_DEBUG] Global schoolPolygons for use:', JSON.stringify(schoolPolygons, null, 2));
+          console.log( // Keep existing log for context
             "Polygon coördinaten geladen:",
             schoolPolygons.length,
             "polygon(en)"
@@ -156,6 +190,7 @@ function ajaxcall() {
             "Geen geldige polygon coördinaten ontvangen in startInfo.polygons."
           );
           schoolPolygons = []; // Reset naar lege array
+          console.log('[GEO_DEBUG] Global schoolPolygons set to empty array.');
         }
 
         // --- Knop Logica (blijft hetzelfde) ---
@@ -244,9 +279,16 @@ function startWerkuur() {
         };
 
         let isInsideAnyPolygon = false;
+        console.log('[GEO_DEBUG] Geofence check initiated. User location:', JSON.stringify(userLocation, null, 2));
+        console.log('[GEO_DEBUG] Using schoolPolygons for check:', JSON.stringify(schoolPolygons, null, 2));
+
         if (schoolPolygons && Array.isArray(schoolPolygons)) {
           for (const polygon of schoolPolygons) {
-            if (isPointInPolygon(userLocation, polygon)) {
+            console.log('[GEO_DEBUG] Checking against polygon:', JSON.stringify(polygon, null, 2));
+            console.log('[GEO_DEBUG] Calling isPointInPolygon with point:', JSON.stringify(userLocation, null, 2), 'and polygon:', JSON.stringify(polygon, null, 2));
+            let isInside = isPointInPolygon(userLocation, polygon); 
+            console.log('[GEO_DEBUG] isPointInPolygon result:', isInside);
+            if (isInside) {
               isInsideAnyPolygon = true;
               break;
             }
@@ -352,9 +394,16 @@ function stopWerkuur() {
         ); // Goed voor debugging
 
         let isInsideAnyPolygon = false;
+        console.log('[GEO_DEBUG] Geofence check initiated. User location:', JSON.stringify(userLocation, null, 2));
+        console.log('[GEO_DEBUG] Using schoolPolygons for check:', JSON.stringify(schoolPolygons, null, 2));
+
         if (schoolPolygons && Array.isArray(schoolPolygons)) {
           for (const polygon of schoolPolygons) {
-            if (isPointInPolygon(userLocation, polygon)) {
+            console.log('[GEO_DEBUG] Checking against polygon:', JSON.stringify(polygon, null, 2));
+            console.log('[GEO_DEBUG] Calling isPointInPolygon with point:', JSON.stringify(userLocation, null, 2), 'and polygon:', JSON.stringify(polygon, null, 2));
+            let isInside = isPointInPolygon(userLocation, polygon);
+            console.log('[GEO_DEBUG] isPointInPolygon result:', isInside);
+            if (isInside) {
               isInsideAnyPolygon = true;
               break;
             }

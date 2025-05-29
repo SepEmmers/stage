@@ -65,108 +65,100 @@ if (isset($_POST['action'])) {
 
         // --- *** BIJGEWERKTE CASE GET_START_INFO *** ---
         case 'get_start_info':
-            if (isset($_POST['personeel_fk'])) {
-                $personeel_id = (int)$_POST['personeel_fk']; // Veiliger: cast naar integer
-                $school_fk = 101; // Behoud hardcoded school_fk zoals in origineel
-
-                // Roep de nieuwe stored procedure aan die alle info in één keer ophaalt
-                $sql = "CALL usp_GetEnhancedStartInfo(?, ?)";
-                $stmt = $conn->prepare($sql);
-
-                // Controleer of het voorbereiden gelukt is
-                if ($stmt) {
-                    $stmt->bind_param("ii", $personeel_id, $school_fk);
-                    $stmt->execute();
-                    $result = $stmt->get_result();
-
-                    // Controleer of er een resultaat is
-                    if ($result && $result->num_rows > 0) {
-                        $start_info_raw = $result->fetch_assoc(); // Haal de rij met data op
-
-                        // Initialize $output_data with values from usp_GetEnhancedStartInfo
-                        $output_data = [
-                            'personeelsnaam' => $start_info_raw['personeelsnaam'] ?? null,
-                            'isWerkuurGestart' => isset($start_info_raw['isWerkuurGestart']) ? (bool)$start_info_raw['isWerkuurGestart'] : false,
-                            'isVandaagAlGewerktofGestopt' => isset($start_info_raw['isVandaagAlGewerktofGestopt']) ? (bool)$start_info_raw['isVandaagAlGewerktofGestopt'] : false,
-                            'polygons' => [], // Default to empty, will be populated below
-                            'current_break_start_timestamp' => null,
-                            'current_break_accumulated_seconds_before_pause' => 0
-                        ];
-
-                        // Verwerk de polygonen JSON string uit de database
-                        if (isset($start_info_raw['polygons_json']) && !empty($start_info_raw['polygons_json'])) {
-                            $polygon_strings_array = json_decode($start_info_raw['polygons_json'], true);
-                            if (is_array($polygon_strings_array)) {
-                                foreach ($polygon_strings_array as $coord_string) {
-                                    if (is_string($coord_string)) {
-                                        $decoded_poly = json_decode($coord_string, true);
-                                        if (is_array($decoded_poly)) {
-                                            $output_data['polygons'][] = $decoded_poly;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Fetch break data if a work hour is started
-                        if ($output_data['isWerkuurGestart']) {
-                            $active_werkuur_id = getActiveWerkuurId($conn, $personeel_id); // Use personeel_id from the outer scope
-                            if ($active_werkuur_id) {
-                                $stmt_break_data = $conn->prepare("SELECT current_break_start_timestamp, current_break_accumulated_seconds_before_pause FROM werkuren WHERE pk_werkuren = ?");
-                                if ($stmt_break_data) {
-                                    $stmt_break_data->bind_param("i", $active_werkuur_id);
-                                    $stmt_break_data->execute();
-                                    $result_break_data = $stmt_break_data->get_result();
-                                    $break_data = $result_break_data->fetch_assoc();
-                                    $stmt_break_data->close();
-
-                                    if ($break_data) {
-                                        $output_data['current_break_start_timestamp'] = $break_data['current_break_start_timestamp'];
-                                        $output_data['current_break_accumulated_seconds_before_pause'] = (int)$break_data['current_break_accumulated_seconds_before_pause'];
-                                    }
-                                } else {
-                                    error_log("Prepare statement failed for break data: " . $conn->error);
-                                }
-                            }
-                        }
-                        echo json_encode($output_data);
-
-                    } else {
-                        // Geen resultaat gevonden door de stored procedure usp_GetEnhancedStartInfo
-                        // Still provide default break data structure
-                        echo json_encode([
-                            'error' => 'Kon startinformatie niet ophalen (geen data).', 
-                            'personeel_id' => $personeel_id,
-                            'current_break_start_timestamp' => null,
-                            'current_break_accumulated_seconds_before_pause' => 0,
-                            'isWerkuurGestart' => false // Explicitly set
-                        ]);
-                    }
-                    // Sluit het statement
-                    $stmt->close();
-                    // Belangrijk na een stored procedure die resultaten teruggeeft
-                    // om eventuele volgende result sets op te ruimen
-                    while (mysqli_next_result($conn)) { if (!mysqli_more_results($conn)) break; }
-
-                } else {
-                    // Fout bij het voorbereiden van de SQL statement voor usp_GetEnhancedStartInfo
-                    error_log("Prepare statement failed for usp_GetEnhancedStartInfo: " . $conn->error); // Log de fout server-side
-                    echo json_encode([
-                        'error' => 'Databasefout bij voorbereiden.', 
-                        'details' => $conn->error,
-                        'current_break_start_timestamp' => null,
-                        'current_break_accumulated_seconds_before_pause' => 0,
-                        'isWerkuurGestart' => false // Explicitly set
-                    ]);
-                }
-
-            } else {
-                // Benodigde parameter 'personeel_fk' ontbreekt
+            // Use session ID for personeel_id
+            $personeel_id = $_SESSION['personeel_id'] ?? null; 
+        
+            if (!$personeel_id) {
                 echo json_encode([
-                    'error' => 'Personeel FK niet gespecificeerd.',
+                    'error' => 'Gebruiker niet ingelogd of sessie verlopen.',
                     'current_break_start_timestamp' => null,
                     'current_break_accumulated_seconds_before_pause' => 0,
-                    'isWerkuurGestart' => false // Explicitly set
+                    'isWerkuurGestart' => false,
+                    'polygons' => []
+                ]);
+                exit;
+            }
+        
+            // TODO: Make school_fk dynamic based on user's actual school association.
+            $school_fk = 101; // Kept for testing with provided polygon data for pk_locatie = 1
+        
+            $sql = "CALL usp_GetEnhancedStartInfo(?, ?)";
+            $stmt = $conn->prepare($sql);
+        
+            if ($stmt) {
+                $stmt->bind_param("ii", $personeel_id, $school_fk);
+                $stmt->execute();
+                $result = $stmt->get_result();
+        
+                if ($result && $result->num_rows > 0) {
+                    $start_info_raw = $result->fetch_assoc();
+        
+                    $output_data = [
+                        'personeelsnaam' => $start_info_raw['personeelsnaam'] ?? null,
+                        'isWerkuurGestart' => isset($start_info_raw['isWerkuurGestart']) ? (bool)$start_info_raw['isWerkuurGestart'] : false,
+                        'isVandaagAlGewerktofGestopt' => isset($start_info_raw['isVandaagAlGewerktofGestopt']) ? (bool)$start_info_raw['isVandaagAlGewerktofGestopt'] : false,
+                        'polygons' => [],
+                        'current_break_start_timestamp' => null,
+                        'current_break_accumulated_seconds_before_pause' => 0
+                    ];
+        
+                    if (isset($start_info_raw['polygons_json']) && !empty($start_info_raw['polygons_json'])) {
+                        $decoded_polygon_data = json_decode($start_info_raw['polygons_json'], true);
+                        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded_polygon_data)) {
+                            // Assuming $decoded_polygon_data is an array of {lat, lon} points for a single polygon
+                            $output_data['polygons'] = [$decoded_polygon_data]; 
+                        } else {
+                            error_log("API.php: Failed to decode polygons_json for personeel_id " . $personeel_id . ". JSON Error: " . json_last_error_msg() . ". Raw data: " . $start_info_raw['polygons_json']);
+                        }
+                    } else {
+                         error_log("API.php: polygons_json field not set or empty for personeel_id " . $personeel_id);
+                    }
+                    
+                    // Fetch break data if a work hour is started
+                    if ($output_data['isWerkuurGestart']) {
+                        $active_werkuur_id = getActiveWerkuurId($conn, $personeel_id);
+                        if ($active_werkuur_id) {
+                            $stmt_break_data = $conn->prepare("SELECT current_break_start_timestamp, current_break_accumulated_seconds_before_pause FROM werkuren WHERE pk_werkuren = ?");
+                            if ($stmt_break_data) {
+                                $stmt_break_data->bind_param("i", $active_werkuur_id);
+                                $stmt_break_data->execute();
+                                $result_break_data = $stmt_break_data->get_result();
+                                $break_data_row = $result_break_data->fetch_assoc(); // Changed variable name
+                                $stmt_break_data->close();
+        
+                                if ($break_data_row) { // Check if data was fetched
+                                    $output_data['current_break_start_timestamp'] = $break_data_row['current_break_start_timestamp'];
+                                    $output_data['current_break_accumulated_seconds_before_pause'] = (int)$break_data_row['current_break_accumulated_seconds_before_pause'];
+                                }
+                            } else {
+                                error_log("Prepare statement failed for break data: " . $conn->error);
+                            }
+                        }
+                    }
+                    echo json_encode($output_data);
+        
+                } else {
+                    echo json_encode([
+                        'error' => 'Kon startinformatie niet ophalen (geen data via SP).', 
+                        'personeel_id' => $personeel_id,
+                        'current_break_start_timestamp' => null,
+                        'current_break_accumulated_seconds_before_pause' => 0,
+                        'isWerkuurGestart' => false,
+                        'polygons' => []
+                    ]);
+                }
+                $stmt->close();
+                while (mysqli_next_result($conn)) { if (!mysqli_more_results($conn)) break; }
+        
+            } else {
+                error_log("Prepare statement failed for usp_GetEnhancedStartInfo: " . $conn->error);
+                echo json_encode([
+                    'error' => 'Databasefout bij voorbereiden usp_GetEnhancedStartInfo.', 
+                    'details' => $conn->error,
+                    'current_break_start_timestamp' => null,
+                    'current_break_accumulated_seconds_before_pause' => 0,
+                    'isWerkuurGestart' => false,
+                    'polygons' => []
                 ]);
             }
             break;
