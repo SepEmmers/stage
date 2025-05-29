@@ -283,14 +283,45 @@ function startWerkuur() {
         console.log('[GEO_DEBUG] Using schoolPolygons for check:', JSON.stringify(schoolPolygons, null, 2));
 
         if (schoolPolygons && Array.isArray(schoolPolygons)) {
-          for (const polygon of schoolPolygons) {
-            console.log('[GEO_DEBUG] Checking against polygon:', JSON.stringify(polygon, null, 2));
-            console.log('[GEO_DEBUG] Calling isPointInPolygon with point:', JSON.stringify(userLocation, null, 2), 'and polygon:', JSON.stringify(polygon, null, 2));
-            let isInside = isPointInPolygon(userLocation, polygon); 
+          for (const polygon_wrapper of schoolPolygons) { 
+            console.log('[GEO_DEBUG] Checking against polygon_wrapper:', JSON.stringify(polygon_wrapper, null, 2));
+
+            let actual_polygon_points = null;
+            if (Array.isArray(polygon_wrapper) && polygon_wrapper.length > 0 && 
+                Array.isArray(polygon_wrapper[0]) && polygon_wrapper[0].length > 0 && // Ensure inner array is not empty
+                typeof polygon_wrapper[0][0] === 'object' && 
+                typeof polygon_wrapper[0][0].latitude === 'number' && 
+                typeof polygon_wrapper[0][0].longitude === 'number') {
+                // This condition checks if polygon_wrapper is like [[{lat,lon}, ...]]
+                // This matches the structure where schoolPolygons is like [ [[P1]], [[P2]] ]
+                // and polygon_wrapper is [[P1]]
+                actual_polygon_points = polygon_wrapper[0];
+            } else if (Array.isArray(polygon_wrapper) && polygon_wrapper.length > 0 && 
+                       typeof polygon_wrapper[0] === 'object' &&
+                       typeof polygon_wrapper[0].latitude === 'number' && 
+                       typeof polygon_wrapper[0].longitude === 'number') {
+                // This condition checks if polygon_wrapper is already like [{lat,lon}, ...]
+                // This matches the structure where schoolPolygons is like [ [P1], [P2] ]
+                // and polygon_wrapper is [P1]
+                actual_polygon_points = polygon_wrapper;
+            } else {
+                console.error('[GEO_DEBUG] Polygon structure is not as expected by refined logic:', JSON.stringify(polygon_wrapper, null, 2));
+                continue; // Skip this iteration as the polygon structure is unrecognized
+            }
+
+            if (!actual_polygon_points || actual_polygon_points.length === 0) {
+                console.warn('[GEO_DEBUG] Extracted actual_polygon_points is empty or invalid, skipping.');
+                continue;
+            }
+
+            // The existing console.log for calling isPointInPolygon should use actual_polygon_points
+            console.log('[GEO_DEBUG] Calling isPointInPolygon with point:', JSON.stringify(userLocation, null, 2), 'and actual_polygon_points:', JSON.stringify(actual_polygon_points, null, 2));
+            let isInside = isPointInPolygon(userLocation, actual_polygon_points);
             console.log('[GEO_DEBUG] isPointInPolygon result:', isInside);
+
             if (isInside) {
-              isInsideAnyPolygon = true;
-              break;
+                isInsideAnyPolygon = true;
+                break; 
             }
           }
         }
@@ -398,14 +429,45 @@ function stopWerkuur() {
         console.log('[GEO_DEBUG] Using schoolPolygons for check:', JSON.stringify(schoolPolygons, null, 2));
 
         if (schoolPolygons && Array.isArray(schoolPolygons)) {
-          for (const polygon of schoolPolygons) {
-            console.log('[GEO_DEBUG] Checking against polygon:', JSON.stringify(polygon, null, 2));
-            console.log('[GEO_DEBUG] Calling isPointInPolygon with point:', JSON.stringify(userLocation, null, 2), 'and polygon:', JSON.stringify(polygon, null, 2));
-            let isInside = isPointInPolygon(userLocation, polygon);
+          for (const polygon_wrapper of schoolPolygons) { 
+            console.log('[GEO_DEBUG] Checking against polygon_wrapper:', JSON.stringify(polygon_wrapper, null, 2));
+
+            let actual_polygon_points = null;
+            if (Array.isArray(polygon_wrapper) && polygon_wrapper.length > 0 && 
+                Array.isArray(polygon_wrapper[0]) && polygon_wrapper[0].length > 0 && // Ensure inner array is not empty
+                typeof polygon_wrapper[0][0] === 'object' && 
+                typeof polygon_wrapper[0][0].latitude === 'number' && 
+                typeof polygon_wrapper[0][0].longitude === 'number') {
+                // This condition checks if polygon_wrapper is like [[{lat,lon}, ...]]
+                // This matches the structure where schoolPolygons is like [ [[P1]], [[P2]] ]
+                // and polygon_wrapper is [[P1]]
+                actual_polygon_points = polygon_wrapper[0];
+            } else if (Array.isArray(polygon_wrapper) && polygon_wrapper.length > 0 && 
+                       typeof polygon_wrapper[0] === 'object' &&
+                       typeof polygon_wrapper[0].latitude === 'number' && 
+                       typeof polygon_wrapper[0].longitude === 'number') {
+                // This condition checks if polygon_wrapper is already like [{lat,lon}, ...]
+                // This matches the structure where schoolPolygons is like [ [P1], [P2] ]
+                // and polygon_wrapper is [P1]
+                actual_polygon_points = polygon_wrapper;
+            } else {
+                console.error('[GEO_DEBUG] Polygon structure is not as expected by refined logic:', JSON.stringify(polygon_wrapper, null, 2));
+                continue; // Skip this iteration as the polygon structure is unrecognized
+            }
+
+            if (!actual_polygon_points || actual_polygon_points.length === 0) {
+                console.warn('[GEO_DEBUG] Extracted actual_polygon_points is empty or invalid, skipping.');
+                continue;
+            }
+
+            // The existing console.log for calling isPointInPolygon should use actual_polygon_points
+            console.log('[GEO_DEBUG] Calling isPointInPolygon with point:', JSON.stringify(userLocation, null, 2), 'and actual_polygon_points:', JSON.stringify(actual_polygon_points, null, 2));
+            let isInside = isPointInPolygon(userLocation, actual_polygon_points);
             console.log('[GEO_DEBUG] isPointInPolygon result:', isInside);
+
             if (isInside) {
-              isInsideAnyPolygon = true;
-              break;
+                isInsideAnyPolygon = true;
+                break; 
             }
           }
         }
